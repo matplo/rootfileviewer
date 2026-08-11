@@ -18,11 +18,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("rootfile", help="path to the .root file")
     parser.add_argument("--tui", action="store_true", help="launch interactive textual TUI instead of one-shot print")
+    parser.add_argument(
+        "--terse", "-t",
+        action="store_true",
+        help="plain, tab-separated output with no borders/colors, for scripts/grep/awk",
+    )
     parser.add_argument("--depth", type=int, default=None, help="limit directory recursion depth")
     parser.add_argument("--filter", dest="name_filter", default=None, help="regex to filter key names")
     parser.add_argument("--no-branches", action="store_true", help="skip per-TTree branch tables in CLI mode")
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
     args = parser.parse_args(argv)
+
+    if args.tui and args.terse:
+        print("error: --tui and --terse/-t are mutually exclusive", file=sys.stderr)
+        return 1
 
     if not os.path.isfile(args.rootfile):
         print(f"error: no such file: {args.rootfile}", file=sys.stderr)
@@ -37,6 +46,10 @@ def main(argv: list[str] | None = None) -> int:
                 from rootview.tui import run_tui
 
                 run_tui(args.rootfile, nodes, summary)
+            elif args.terse:
+                from rootview.render import render_terse
+
+                render_terse(args.rootfile, nodes, summary, show_branches=not args.no_branches)
             else:
                 from rootview.render import render_cli
 

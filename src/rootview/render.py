@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from rootview.core import Node, flatten_trees, human_size, node_hint, tree_branch_info
+from rootview.core import Node, flatten_nodes, flatten_trees, human_size, node_facts, node_hint, tree_branch_info
 
 
 def render_cli(path: str, nodes: list[Node], summary: dict, show_branches: bool = True) -> None:
@@ -40,6 +40,27 @@ def render_cli(path: str, nodes: list[Node], summary: dict, show_branches: bool 
             for row in rows:
                 table.add_row(row["name"], row["typename"])
             console.print(table)
+
+
+def render_terse(path: str, nodes: list[Node], summary: dict, show_branches: bool = True) -> None:
+    """Flat, tab-separated, no-color output for scripts/grep/awk.
+
+    Every line starts with a record-type tag (summary/object/branch) so a
+    consumer can select what it wants, e.g.:
+        rootview file.root -t | awk -F'\\t' '$1 == "branch" && $2 == "tree1"'
+        rootview file.root -t | grep '^object.*TTree'
+    """
+    for key, value in summary.items():
+        print(f"summary\t{key}\t{value}")
+
+    for obj_path, node in flatten_nodes(nodes):
+        fields = [f"{k}={v}" for k, v in node_facts(node).items()]
+        print("\t".join(["object", obj_path, node.classname, *fields]))
+
+    if show_branches:
+        for tree_path, node in flatten_trees(nodes):
+            for row in tree_branch_info(node.obj):
+                print(f"branch\t{tree_path}\t{row['name']}\t{row['typename']}")
 
 
 def _class_style(node: Node) -> str:

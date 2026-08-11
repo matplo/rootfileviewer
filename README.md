@@ -13,6 +13,8 @@ installation required.
   plots it as an ASCII bar chart in a panel below, via
   [`textual-plotext`](https://github.com/Textualize/textual-plotext)/[`plotext`](https://github.com/piccolomo/plotext).
   2D/3D histograms aren't plotted yet — the detail panel notes this instead.
+- **Terse mode** (`--terse`/`-t`): flat, tab-separated, no-color output —
+  for piping into `grep`/`awk`/other scripts.
 
 ## Install
 
@@ -52,14 +54,45 @@ file.root
     └── tree2 (TTree) - 10 entries, 1 branches
 ```
 
+### Terse mode
+
+`--terse`/`-t` prints flat, tab-separated lines instead of panels/trees/tables —
+each line starts with a record-type tag (`summary`/`object`/`branch`) so a
+consumer can pick out what it needs:
+
+```
+$ rootview file.root -t
+summary	path	file.root
+summary	size_bytes	65536
+summary	uproot_version	5.7.5
+summary	compression	ZLIB(1)
+summary	num_trees	2
+summary	num_histograms	1
+summary	total_keys	3
+object	tree1	TTree	entries=1000	branches=3
+object	hist1	TH1D	bins=20
+object	subdir	TDirectory
+object	subdir/tree2	TTree	entries=10	branches=1
+branch	tree1	px	double
+branch	tree1	py	double
+branch	tree1	n	int32_t
+branch	subdir/tree2	x	int64_t
+```
+
+```bash
+rootview file.root -t | grep '^branch'
+rootview file.root -t | awk -F'\t' '$1 == "branch" && $2 == "tree1" {print $3, $4}'
+```
+
 ### Options
 
-| Flag             | Description                                             |
-|-------------------|---------------------------------------------------------|
-| `--tui`            | launch the interactive textual TUI instead of printing |
-| `--depth N`        | limit directory recursion depth                        |
-| `--filter REGEX`   | only show keys whose name matches REGEX                |
-| `--no-branches`    | skip per-TTree branch tables in one-shot mode           |
+| Flag              | Description                                             |
+|-------------------|----------------------------------------------------------|
+| `--tui`           | launch the interactive textual TUI instead of printing   |
+| `--terse`, `-t`   | flat, tab-separated output with no borders/colors        |
+| `--depth N`       | limit directory recursion depth                          |
+| `--filter REGEX`  | only show keys whose name matches REGEX                  |
+| `--no-branches`   | skip per-TTree branch info in one-shot/terse mode         |
 
 ## License
 

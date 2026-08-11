@@ -101,18 +101,35 @@ def human_size(n: int) -> str:
     return f"{size:.1f} TB"
 
 
-def node_hint(node: Node) -> str:
-    """Short type-specific annotation shown next to a node's name."""
+def node_facts(node: Node) -> dict[str, int]:
+    """Raw numeric facts about a node (entries/branches/bins), for machine consumption.
+
+    See `node_hint` for the human-readable, formatted equivalent.
+    """
     if node.is_tree and node.obj is not None:
         try:
-            return f"{node.obj.num_entries:,} entries, {len(node.obj.branches)} branches"
+            return {"entries": node.obj.num_entries, "branches": len(node.obj.branches)}
         except Exception:
-            return ""
+            return {}
     if node.is_hist and node.obj is not None:
         try:
-            return f"{len(node.obj.axis())} bins"
+            return {"bins": len(node.obj.axis())}
         except Exception:
+            return {}
+    return {}
+
+
+def node_hint(node: Node) -> str:
+    """Short, human-readable annotation shown next to a node's name."""
+    facts = node_facts(node)
+    if node.is_tree:
+        if "entries" not in facts:
             return ""
+        return f"{facts['entries']:,} entries, {facts['branches']} branches"
+    if node.is_hist:
+        if "bins" not in facts:
+            return ""
+        return f"{facts['bins']} bins"
     return ""
 
 
@@ -136,4 +153,15 @@ def flatten_trees(nodes: list[Node], prefix: str = "") -> list[tuple[str, Node]]
             result.append((path, node))
         elif node.is_dir:
             result.extend(flatten_trees(node.children, path))
+    return result
+
+
+def flatten_nodes(nodes: list[Node], prefix: str = "") -> list[tuple[str, Node]]:
+    """Flatten the tree into (full_path, node) pairs, depth-first, directories included."""
+    result = []
+    for node in nodes:
+        path = f"{prefix}/{node.name}" if prefix else node.name
+        result.append((path, node))
+        if node.is_dir and node.children:
+            result.extend(flatten_nodes(node.children, path))
     return result
