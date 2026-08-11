@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rootview"
+version = "0.1.0"
+description = "Terminal viewer for ROOT files using uproot — ASCII tree, branch tables, and an interactive TUI."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "matplo" },
+]
+keywords = ["root", "uproot", "cern", "physics", "terminal", "tui", "cli"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "uproot>=5.0",
+    "rich>=13.0",
+    "textual>=0.50",
+]
+
+[project.urls]
+Homepage = "https://github.com/matplo/rootview"
+Issues = "https://github.com/matplo/rootview/issues"
+
+[project.scripts]
+rootview = "rootview.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rootview"]
