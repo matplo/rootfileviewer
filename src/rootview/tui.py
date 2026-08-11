@@ -38,10 +38,29 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
             tree_widget.root.expand()
             self._populate(tree_widget.root, nodes)
             table = self.query_one("#detail", DataTable)
-            table.add_columns("Field", "Value")
-            for k, v in summary.items():
-                table.add_row(k, str(v))
+            self._set_table(table, ("Field", "Value"), [(k, str(v)) for k, v in summary.items()])
             self.query_one("#histplot", PlotextPlot).display = False
+
+        @staticmethod
+        def _set_table(table: DataTable, headers: tuple[str, str], rows: list[tuple[str, str]]) -> None:
+            """Replace a DataTable's columns/rows with explicit content-based widths.
+
+            `add_columns()` leaves column width to DataTable's lazy auto-sizing,
+            which can render stale/inconsistent widths across rows when the
+            table's columns are repeatedly cleared and rebuilt (e.g. selecting
+            different TTrees in quick succession). Computing widths ourselves
+            avoids that entirely.
+            """
+            table.clear(columns=True)
+            max_width = 60
+            widths = [
+                min(max(len(headers[i]), *(len(str(row[i])) for row in rows)) + 2, max_width) if rows else len(headers[i]) + 2
+                for i in range(2)
+            ]
+            for header, width in zip(headers, widths):
+                table.add_column(header, width=width)
+            for row in rows:
+                table.add_row(*row)
 
         def _populate(self, parent, node_list: list[Node]) -> None:
             for node in node_list:
@@ -59,30 +78,27 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
             node: Node | None = event.node.data
             table = self.query_one("#detail", DataTable)
             plot_widget = self.query_one("#histplot", PlotextPlot)
-            table.clear(columns=True)
             plot_widget.display = False
 
             if node is None:
+                self._set_table(table, ("Field", "Value"), [])
                 return
 
             if node.is_tree and node.obj is not None:
-                table.add_columns("Branch", "Type")
-                for row in tree_branch_info(node.obj):
-                    table.add_row(row["name"], row["typename"])
+                rows = [(row["name"], row["typename"]) for row in tree_branch_info(node.obj)]
+                self._set_table(table, ("Branch", "Type"), rows)
                 return
 
-            table.add_columns("Field", "Value")
-            table.add_row("name", node.name)
-            table.add_row("classname", node.classname)
+            rows = [("name", node.name), ("classname", node.classname)]
             hint = node_hint(node)
             if hint:
-                table.add_row("info", hint)
+                rows.append(("info", hint))
+            if node.is_hist and node.obj is not None and not is_1d_histogram(node.classname):
+                rows.append(("plot", "not supported yet (2D/3D histogram)"))
+            self._set_table(table, ("Field", "Value"), rows)
 
-            if node.is_hist and node.obj is not None:
-                if is_1d_histogram(node.classname):
-                    self._plot_histogram(plot_widget, node)
-                else:
-                    table.add_row("plot", "not supported yet (2D/3D histogram)")
+            if node.is_hist and node.obj is not None and is_1d_histogram(node.classname):
+                self._plot_histogram(plot_widget, node)
 
         def _plot_histogram(self, plot_widget: "PlotextPlot", node: Node) -> None:
             try:
