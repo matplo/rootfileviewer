@@ -116,6 +116,18 @@ def node_hint(node: Node) -> str:
     return ""
 
 
+def is_1d_histogram(classname: str) -> bool:
+    """Whether a histogram classname is 1D and thus bar-plottable (TH1*, TProfile)."""
+    return classname.startswith(("TH1", "TProfile"))
+
+
+def histogram_data(hist_obj) -> tuple[list[float], list[float]]:
+    """Bin centers and values for a 1D histogram-like object, for bar plotting."""
+    values, edges = hist_obj.to_numpy()
+    centers = [(edges[i] + edges[i + 1]) / 2 for i in range(len(values))]
+    return centers, [float(v) for v in values]
+
+
 def flatten_trees(nodes: list[Node], prefix: str = "") -> list[tuple[str, Node]]:
     result = []
     for node in nodes:

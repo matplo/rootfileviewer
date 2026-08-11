@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rootview"
-version = "0.1.0"
+version = "0.2.0"
 description = "Terminal viewer for ROOT files using uproot — ASCII tree, branch tables, and an interactive TUI."
 readme = "README.md"
 license = "MIT"
@@ -25,6 +25,8 @@ dependencies = [
     "uproot>=5.0",
     "rich>=13.0",
     "textual>=0.50",
+    "plotext>=5.0",
+    "textual-plotext>=1.0",
 ]
 
 [project.urls]

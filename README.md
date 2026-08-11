@@ -9,7 +9,10 @@ installation required.
   and per-`TTree` branch tables, rendered with [`rich`](https://github.com/Textualize/rich).
 - **Interactive TUI** (`--tui`): a navigable [`textual`](https://github.com/Textualize/textual)
   app — arrow keys to browse the object tree, select a node to see its
-  details in a side panel.
+  details in a side panel. Selecting a 1D histogram (`TH1*`/`TProfile`)
+  plots it as an ASCII bar chart in a panel below, via
+  [`textual-plotext`](https://github.com/Textualize/textual-plotext)/[`plotext`](https://github.com/piccolomo/plotext).
+  2D/3D histograms aren't plotted yet — the detail panel notes this instead.
 
 ## Install
 
