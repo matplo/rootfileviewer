@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import os
 
-from rootview.core import Node, histogram_data, is_1d_histogram, node_hint, tree_branch_info
+from rootview.core import (
+    Node,
+    branch_histogram_data,
+    branch_nodes,
+    histogram_data,
+    is_1d_histogram,
+    node_hint,
+    tree_branch_info,
+)
 
 
 def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
@@ -71,12 +79,17 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
                 child = parent.add(label, data=node)
                 if node.children:
                     self._populate(child, node.children)
+                elif node.is_tree and node.obj is not None:
+                    # TTree/TNtuple: expand into its branches, so a specific
+                    # branch can be selected and plotted on its own.
+                    for bnode in branch_nodes(node.obj):
+                        child.add_leaf(f"{bnode.name} ({bnode.classname})", data=bnode)
                 else:
-                    # Leaf node (TTree, histogram, or anything else with nothing
-                    # to descend into): disable the expand arrow. Otherwise
-                    # Tree's default auto_expand behavior toggles it
-                    # expanded/collapsed on every Enter press with nothing to
-                    # actually show, which reads as the row's formatting
+                    # Leaf node (histogram, TList, or anything else with
+                    # nothing to descend into): disable the expand arrow.
+                    # Otherwise Tree's default auto_expand behavior toggles
+                    # it expanded/collapsed on every Enter press with nothing
+                    # to actually show, which reads as the row's formatting
                     # randomly changing each time you select it.
                     child.allow_expand = False
 
@@ -88,6 +101,16 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
 
             if node is None:
                 self._set_table(table, ("Field", "Value"), [])
+                return
+
+            if node.is_branch:
+                rows = [("branch", node.name), ("type", node.classname)]
+                note, error = self._plot_branch(plot_widget, node)
+                if note:
+                    rows.append(("sampled", note))
+                if error:
+                    rows.append(("plot error", error))
+                self._set_table(table, ("Field", "Value"), rows)
                 return
 
             if node.is_tree and node.obj is not None:
@@ -110,19 +133,33 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
 
             self._set_table(table, ("Field", "Value"), rows)
 
+        @staticmethod
+        def _render_plot(plot_widget: "PlotextPlot", title: str, centers: list[float], values: list[float]) -> None:
+            plt = plot_widget.plt
+            plt.clear_figure()
+            plt.title(title)
+            plt.bar(centers, values, width=1.0)
+            plot_widget.display = True
+            plot_widget.refresh()
+
         def _plot_histogram(self, plot_widget: "PlotextPlot", node: Node) -> str | None:
             """Render node's histogram into plot_widget. Returns an error message, if any."""
             try:
                 centers, values = histogram_data(node.obj)
-                plt = plot_widget.plt
-                plt.clear_figure()
-                plt.title(node.name)
-                plt.bar(centers, values, width=1.0)
-                plot_widget.display = True
-                plot_widget.refresh()
+                self._render_plot(plot_widget, node.name, centers, values)
             except Exception as exc:
                 plot_widget.display = False
                 return str(exc)
             return None
+
+        def _plot_branch(self, plot_widget: "PlotextPlot", node: Node) -> tuple[str | None, str | None]:
+            """Render a branch's value distribution. Returns (sampling note, error message)."""
+            try:
+                centers, values, note = branch_histogram_data(node.obj)
+                self._render_plot(plot_widget, node.name, centers, values)
+                return note, None
+            except Exception as exc:
+                plot_widget.display = False
+                return None, str(exc)
 
     RootViewApp().run()

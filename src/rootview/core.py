@@ -6,9 +6,15 @@ import os
 import re
 from dataclasses import dataclass, field
 
+import numpy as np
 import uproot
 
 _HIST_CLASS_PREFIXES = ("TH1", "TH2", "TH3", "TProfile")
+
+#: Default cap on how many entries to read when plotting a branch's value
+#: distribution, so selecting a branch on a huge tree stays responsive.
+DEFAULT_BRANCH_PLOT_MAX_ENTRIES = 200_000
+DEFAULT_BRANCH_PLOT_BINS = 30
 
 
 @dataclass
@@ -17,6 +23,9 @@ class Node:
     classname: str
     obj: object
     children: list["Node"] = field(default_factory=list)
+    is_branch: bool = False
+    """True if this node is a synthetic TBranch child of a TTree/TNtuple node
+    (as opposed to a real file object from walk_directory)."""
 
     @property
     def is_dir(self) -> bool:
@@ -143,6 +152,51 @@ def histogram_data(hist_obj) -> tuple[list[float], list[float]]:
     values, edges = hist_obj.to_numpy()
     centers = [(edges[i] + edges[i + 1]) / 2 for i in range(len(values))]
     return centers, [float(v) for v in values]
+
+
+def branch_nodes(tree_obj) -> list[Node]:
+    """Synthetic leaf Nodes for a TTree/TNtuple's branches, for TUI tree display."""
+    nodes = []
+    for branch in tree_obj.branches:
+        try:
+            typename = branch.typename
+        except Exception:
+            typename = "?"
+        nodes.append(Node(name=branch.name, classname=typename, obj=branch, is_branch=True))
+    return nodes
+
+
+def branch_histogram_data(
+    branch,
+    max_entries: int = DEFAULT_BRANCH_PLOT_MAX_ENTRIES,
+    bins: int = DEFAULT_BRANCH_PLOT_BINS,
+) -> tuple[list[float], list[float], str]:
+    """Bin centers/values (via numpy.histogram) for a TBranch's values, plus a note
+    describing how many entries/values were actually used.
+
+    Vector/jagged branches are flattened across all their elements first.
+    Raises ValueError if the branch has no numeric values to histogram.
+    """
+    total = branch.num_entries
+    entry_stop = min(total, max_entries)
+    arr = branch.array(library="np", entry_stop=entry_stop)
+    if arr.dtype.kind not in "iuf":
+        import awkward as ak
+
+        arr = ak.flatten(branch.array(library="ak", entry_stop=entry_stop), axis=None).to_numpy()
+        if arr.dtype.kind not in "iuf":
+            raise ValueError(f"branch '{branch.name}' is not numeric (dtype {arr.dtype})")
+
+    if len(arr) == 0:
+        raise ValueError(f"branch '{branch.name}' has no values to plot")
+
+    values, edges = np.histogram(arr, bins=bins)
+    centers = [(edges[i] + edges[i + 1]) / 2 for i in range(len(values))]
+
+    note = f"{entry_stop:,}/{total:,} entries" if entry_stop < total else f"{total:,} entries"
+    if len(arr) != entry_stop:
+        note += f", {len(arr):,} values (flattened)"
+    return centers, [float(v) for v in values], note
 
 
 def flatten_trees(nodes: list[Node], prefix: str = "") -> list[tuple[str, Node]]:

@@ -13,6 +13,10 @@ installation required.
   plots it as an ASCII bar chart in a panel below, via
   [`textual-plotext`](https://github.com/Textualize/textual-plotext)/[`plotext`](https://github.com/piccolomo/plotext).
   2D/3D histograms aren't plotted yet — the detail panel notes this instead.
+  A `TTree`/`TNtuple` node expands into its branches — selecting a branch
+  plots its value distribution the same way (vector/jagged branches are
+  flattened first; very large trees are capped at 200,000 entries, noted
+  in the detail panel).
 - **Terse mode** (`--terse`/`-t`): flat, tab-separated, no-color output —
   for piping into `grep`/`awk`/other scripts.
 
