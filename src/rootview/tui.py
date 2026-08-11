@@ -71,7 +71,13 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
                 child = parent.add(label, data=node)
                 if node.children:
                     self._populate(child, node.children)
-                elif node.is_dir:
+                else:
+                    # Leaf node (TTree, histogram, or anything else with nothing
+                    # to descend into): disable the expand arrow. Otherwise
+                    # Tree's default auto_expand behavior toggles it
+                    # expanded/collapsed on every Enter press with nothing to
+                    # actually show, which reads as the row's formatting
+                    # randomly changing each time you select it.
                     child.allow_expand = False
 
         def on_tree_node_selected(self, event) -> None:
@@ -93,25 +99,30 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
             hint = node_hint(node)
             if hint:
                 rows.append(("info", hint))
-            if node.is_hist and node.obj is not None and not is_1d_histogram(node.classname):
-                rows.append(("plot", "not supported yet (2D/3D histogram)"))
+
+            if node.is_hist and node.obj is not None:
+                if is_1d_histogram(node.classname):
+                    error = self._plot_histogram(plot_widget, node)
+                    if error:
+                        rows.append(("plot error", error))
+                else:
+                    rows.append(("plot", "not supported yet (2D/3D histogram)"))
+
             self._set_table(table, ("Field", "Value"), rows)
 
-            if node.is_hist and node.obj is not None and is_1d_histogram(node.classname):
-                self._plot_histogram(plot_widget, node)
-
-        def _plot_histogram(self, plot_widget: "PlotextPlot", node: Node) -> None:
+        def _plot_histogram(self, plot_widget: "PlotextPlot", node: Node) -> str | None:
+            """Render node's histogram into plot_widget. Returns an error message, if any."""
             try:
                 centers, values = histogram_data(node.obj)
+                plt = plot_widget.plt
+                plt.clear_figure()
+                plt.title(node.name)
+                plt.bar(centers, values, width=1.0)
+                plot_widget.display = True
+                plot_widget.refresh()
             except Exception as exc:
-                table = self.query_one("#detail", DataTable)
-                table.add_row("plot error", str(exc))
-                return
-            plt = plot_widget.plt
-            plt.clear_figure()
-            plt.title(node.name)
-            plt.bar(centers, values, width=1.0)
-            plot_widget.display = True
-            plot_widget.refresh()
+                plot_widget.display = False
+                return str(exc)
+            return None
 
     RootViewApp().run()
