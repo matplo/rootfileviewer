@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "rootview"
-version = "0.4.0"
+name = "rootfileviewer"
+version = "0.5.0"
 description = "Terminal viewer for ROOT files using uproot — ASCII tree, branch tables, and an interactive TUI."
 readme = "README.md"
 license = "MIT"
@@ -30,11 +30,12 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/matplo/rootview"
-Issues = "https://github.com/matplo/rootview/issues"
+Homepage = "https://github.com/matplo/rootfileviewer"
+Issues = "https://github.com/matplo/rootfileviewer/issues"
 
 [project.scripts]
-rootview = "rootview.cli:main"
+rootfileviewer = "rootfileviewer.cli:main"
+rfv = "rootfileviewer.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/rootview"]
+packages = ["src/rootfileviewer"]

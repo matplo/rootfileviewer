@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from rootview.core import (
+from rootfileviewer.core import (
     Node,
     branch_histogram_data,
     branch_nodes,
@@ -22,7 +22,7 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
     from textual.widgets import Tree as TextualTree
     from textual_plotext import PlotextPlot
 
-    class RootViewApp(App):
+    class RootFileViewerApp(App):
         CSS = """
         #top { height: 1fr; }
         #tree { width: 45%; border: solid $accent; }
@@ -30,7 +30,7 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
         #histplot { height: 15; border: solid $accent; }
         """
         BINDINGS = [("q", "quit", "Quit")]
-        TITLE = f"rootview: {os.path.basename(path)}"
+        TITLE = f"rootfileviewer: {os.path.basename(path)}"
 
         def compose(self) -> ComposeResult:
             yield Header()
@@ -162,4 +162,4 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
                 plot_widget.display = False
                 return None, str(exc)
 
-    RootViewApp().run()
+    RootFileViewerApp().run()

@@ -1,4 +1,4 @@
-# rootview
+# rootfileviewer
 
 Inspect a [ROOT](https://root.cern) file's contents from the terminal —
 directory/object hierarchy, TTree branches, and file-level stats — using
@@ -23,14 +23,17 @@ installation required.
 ## Install
 
 ```bash
-pip install git+https://github.com/matplo/rootview.git
+pip install git+https://github.com/matplo/rootfileviewer.git
 ```
+
+This installs both `rootfileviewer` and the shorter `rfv` command; they are
+equivalent, so `rfv examples/sample.root` works anywhere the long form does.
 
 Or clone and install locally:
 
 ```bash
-git clone https://github.com/matplo/rootview.git
-cd rootview
+git clone https://github.com/matplo/rootfileviewer.git
+cd rootfileviewer
 pip install -e .
 ```
 
@@ -46,15 +49,15 @@ containing:
 Clone the repo and run these directly:
 
 ```bash
-git clone https://github.com/matplo/rootview.git
-cd rootview
-rootview examples/sample.root
+git clone https://github.com/matplo/rootfileviewer.git
+cd rootfileviewer
+rootfileviewer examples/sample.root
 ```
 
 ### One-shot mode
 
 ```bash
-rootview examples/sample.root
+rootfileviewer examples/sample.root
 ```
 
 ```
@@ -90,15 +93,15 @@ sample.root
 Other one-shot flags:
 
 ```bash
-rootview examples/sample.root --depth 0            # don't recurse into subdirectories
-rootview examples/sample.root --filter 'events'    # only show keys matching a regex
-rootview examples/sample.root --no-branches        # skip the per-TTree branch tables
+rootfileviewer examples/sample.root --depth 0            # don't recurse into subdirectories
+rootfileviewer examples/sample.root --filter 'events'    # only show keys matching a regex
+rootfileviewer examples/sample.root --no-branches        # skip the per-TTree branch tables
 ```
 
 ### Interactive TUI
 
 ```bash
-rootview examples/sample.root --tui
+rootfileviewer examples/sample.root --tui
 ```
 
 Arrow keys navigate the tree on the left; `Enter`/click selects a node and
@@ -106,7 +109,7 @@ updates the panel on the right. Expand `events` to see its branches; select
 `pt_hist` or the `pt` branch to plot it below. `q` quits.
 
 ```
-┌─ rootview: sample.root ──────────────────────────────────────────────────┐
+┌─ rootfileviewer: sample.root ──────────────────────────────────────────────────┐
 │ ┌─ tree ───────────────────┐ ┌─ detail ─────────────────────────────┐   │
 │ │ ▼ sample.root             │ │ Field     Value                     │   │
 │ │   ▼ events (TTree) - ...  │ │ branch    pt                        │   │
@@ -204,7 +207,7 @@ each line starts with a record-type tag (`summary`/`object`/`branch`) so a
 consumer can pick out what it needs:
 
 ```bash
-rootview examples/sample.root -t
+rootfileviewer examples/sample.root -t
 ```
 
 ```
@@ -226,9 +229,9 @@ branch	aux/meta	run_number	int32_t
 ```
 
 ```bash
-rootview examples/sample.root -t | grep '^branch'
-rootview examples/sample.root -t | awk -F'\t' '$1 == "branch" && $2 == "events" {print $3, $4}'
-rootview examples/sample.root -t | awk -F'\t' '$1 == "object" && $3 == "TTree" {print $2}'
+rootfileviewer examples/sample.root -t | grep '^branch'
+rootfileviewer examples/sample.root -t | awk -F'\t' '$1 == "branch" && $2 == "events" {print $3, $4}'
+rootfileviewer examples/sample.root -t | awk -F'\t' '$1 == "object" && $3 == "TTree" {print $2}'
 ```
 
 ### Options

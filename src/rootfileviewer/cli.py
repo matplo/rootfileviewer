@@ -1,4 +1,4 @@
-"""Command-line entry point for rootview."""
+"""Command-line entry point for rootfileviewer."""
 
 from __future__ import annotations
 
@@ -8,12 +8,11 @@ import sys
 
 import uproot
 
-from rootview.core import file_summary, walk_directory
+from rootfileviewer.core import file_summary, walk_directory
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="rootview",
         description="Inspect a ROOT file's contents in the terminal (via uproot).",
     )
     parser.add_argument("rootfile", help="path to the .root file")
@@ -43,15 +42,15 @@ def main(argv: list[str] | None = None) -> int:
             summary = file_summary(f, args.rootfile, nodes)
 
             if args.tui:
-                from rootview.tui import run_tui
+                from rootfileviewer.tui import run_tui
 
                 run_tui(args.rootfile, nodes, summary)
             elif args.terse:
-                from rootview.render import render_terse
+                from rootfileviewer.render import render_terse
 
                 render_terse(args.rootfile, nodes, summary, show_branches=not args.no_branches)
             else:
-                from rootview.render import render_cli
+                from rootfileviewer.render import render_cli
 
                 render_cli(args.rootfile, nodes, summary, show_branches=not args.no_branches)
     except Exception as exc:
@@ -62,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _version() -> str:
-    from rootview import __version__
+    from rootfileviewer import __version__
 
     return __version__
 
