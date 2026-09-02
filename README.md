@@ -23,11 +23,19 @@ installation required.
 ## Install
 
 ```bash
-pip install git+https://github.com/matplo/rootfileviewer.git
+pip install rootfileviewer
 ```
 
-This installs both `rootfileviewer` and the shorter `rfv` command; they are
-equivalent, so `rfv examples/sample.root` works anywhere the long form does.
+This installs `rootfileviewer` on [PyPI](https://pypi.org/project/rootfileviewer/),
+along with two shorter aliases for it: `rfv` (equivalent to `rootfileviewer`)
+and `rfvt` (equivalent to `rootfileviewer --tui`). So `rfv examples/sample.root`
+and `rfvt examples/sample.root` work anywhere the long forms do.
+
+You can also install straight from GitHub:
+
+```bash
+pip install git+https://github.com/matplo/rootfileviewer.git
+```
 
 Or clone and install locally:
 
@@ -102,6 +110,8 @@ rootfileviewer examples/sample.root --no-branches        # skip the per-TTree br
 
 ```bash
 rootfileviewer examples/sample.root --tui
+# or, equivalently:
+rfvt examples/sample.root
 ```
 
 Arrow keys navigate the tree on the left; `Enter`/click selects a node and
@@ -238,7 +248,7 @@ rootfileviewer examples/sample.root -t | awk -F'\t' '$1 == "object" && $3 == "TT
 
 | Flag              | Description                                             |
 |-------------------|----------------------------------------------------------|
-| `--tui`           | launch the interactive textual TUI instead of printing   |
+| `--tui`           | launch the interactive textual TUI instead of printing (same as running `rfvt`) |
 | `--terse`, `-t`   | flat, tab-separated output with no borders/colors        |
 | `--depth N`       | limit directory recursion depth                          |
 | `--filter REGEX`  | only show keys whose name matches REGEX                  |

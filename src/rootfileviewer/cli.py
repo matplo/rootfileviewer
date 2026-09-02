@@ -60,6 +60,14 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def main_tui(argv: list[str] | None = None) -> int:
+    """Entry point for `rfvt`: same as `rootfileviewer --tui`."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    if "--tui" not in args:
+        args = ["--tui", *args]
+    return main(args)
+
+
 def _version() -> str:
     from rootfileviewer import __version__
 

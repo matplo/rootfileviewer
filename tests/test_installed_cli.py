@@ -25,7 +25,7 @@ class InstalledCliTests(unittest.TestCase):
             text=True,
         )
 
-    def test_distribution_exposes_both_commands(self) -> None:
+    def test_distribution_exposes_all_commands(self) -> None:
         entry_points = {
             entry_point.name: entry_point.value
             for entry_point in metadata.distribution("rootfileviewer").entry_points
@@ -34,16 +34,17 @@ class InstalledCliTests(unittest.TestCase):
         expected = "rootfileviewer.cli:main"
         self.assertEqual(entry_points.get("rootfileviewer"), expected)
         self.assertEqual(entry_points.get("rfv"), expected)
+        self.assertEqual(entry_points.get("rfvt"), "rootfileviewer.cli:main_tui")
 
     def test_package_version(self) -> None:
-        self.assertEqual(rootfileviewer.__version__, "0.5.1")
+        self.assertEqual(rootfileviewer.__version__, "0.6.0")
 
-    def test_both_commands_report_their_invoked_name(self) -> None:
-        for command in ("rootfileviewer", "rfv"):
+    def test_all_commands_report_their_invoked_name(self) -> None:
+        for command in ("rootfileviewer", "rfv", "rfvt"):
             with self.subTest(command=command):
                 result = self.run_cli(command, "--version")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout.strip(), f"{command} 0.5.1")
+                self.assertEqual(result.stdout.strip(), f"{command} 0.6.0")
 
     def test_both_commands_read_the_sample_file(self) -> None:
         for command in ("rootfileviewer", "rfv"):
@@ -52,6 +53,15 @@ class InstalledCliTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn(f"summary\tpath\t{SAMPLE_FILE}", result.stdout)
                 self.assertIn("object\tevents\tTTree", result.stdout)
+
+    def test_rfvt_implies_tui_mode(self) -> None:
+        # rfvt is `rootfileviewer --tui`; --terse is mutually exclusive with
+        # --tui, so passing it should hit that guard rather than run terse
+        # output. This confirms --tui was injected without launching the
+        # actual interactive TUI (which needs a terminal).
+        result = self.run_cli("rfvt", str(SAMPLE_FILE), "--terse")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("--tui and --terse/-t are mutually exclusive", result.stderr)
 
 
 if __name__ == "__main__":

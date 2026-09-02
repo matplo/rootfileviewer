@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rootfileviewer"
-version = "0.5.1"
+version = "0.6.0"
 description = "Terminal viewer for ROOT files using uproot — ASCII tree, branch tables, and an interactive TUI."
 readme = "README.md"
 license = "MIT"
@@ -36,6 +36,7 @@ Issues = "https://github.com/matplo/rootfileviewer/issues"
 [project.scripts]
 rootfileviewer = "rootfileviewer.cli:main"
 rfv = "rootfileviewer.cli:main"
+rfvt = "rootfileviewer.cli:main_tui"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rootfileviewer"]
