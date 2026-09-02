@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rootfileviewer"
-version = "0.5.0"
+version = "0.5.1"
 description = "Terminal viewer for ROOT files using uproot — ASCII tree, branch tables, and an interactive TUI."
 readme = "README.md"
 license = "MIT"
