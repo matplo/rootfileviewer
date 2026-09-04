@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rootfileviewer"
-version = "0.8.0"
-description = "Terminal viewer for ROOT, Parquet, and HDF5 files — ASCII tree, branch/column tables, and an interactive TUI."
+version = "0.8.1"
+description = "Terminal viewer for ROOT, Parquet, HDF5, and numpy files — ASCII tree, branch/column tables, and an interactive TUI."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [
     { name = "matplo" },
 ]
-keywords = ["root", "uproot", "parquet", "pyarrow", "hdf5", "h5py", "cern", "physics", "terminal", "tui", "cli"]
+keywords = ["root", "uproot", "parquet", "pyarrow", "hdf5", "h5py", "numpy", "npy", "npz", "cern", "physics", "terminal", "tui", "cli"]
 classifiers = [
     "Environment :: Console",
     "Intended Audience :: Science/Research",

@@ -14,6 +14,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_FILE = REPO_ROOT / "examples" / "sample.root"
 SAMPLE_PARQUET = REPO_ROOT / "examples" / "sample.parquet"
 SAMPLE_HDF5 = REPO_ROOT / "examples" / "sample.h5"
+SAMPLE_NPZ = REPO_ROOT / "examples" / "sample.npz"
+SAMPLE_NPY = REPO_ROOT / "examples" / "sample.npy"
 HAVE_PYARROW = importlib.util.find_spec("pyarrow") is not None
 HAVE_H5PY = importlib.util.find_spec("h5py") is not None
 
@@ -42,14 +44,14 @@ class InstalledCliTests(unittest.TestCase):
         self.assertEqual(entry_points.get("rfvt"), "rootfileviewer.cli:main_tui")
 
     def test_package_version(self) -> None:
-        self.assertEqual(rootfileviewer.__version__, "0.8.0")
+        self.assertEqual(rootfileviewer.__version__, "0.8.1")
 
     def test_all_commands_report_their_invoked_name(self) -> None:
         for command in ("rootfileviewer", "rfv", "rfvt"):
             with self.subTest(command=command):
                 result = self.run_cli(command, "--version")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout.strip(), f"{command} 0.8.0")
+                self.assertEqual(result.stdout.strip(), f"{command} 0.8.1")
 
     def test_both_commands_read_the_sample_file(self) -> None:
         for command in ("rootfileviewer", "rfv"):
@@ -105,6 +107,26 @@ class InstalledCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("pip install 'rootfileviewer[hdf5]'", result.stderr)
         self.assertIn("pip install h5py", result.stderr)
+
+    def test_both_commands_read_the_sample_npz_file(self) -> None:
+        # numpy is always available (uproot's own dependency), so this needs
+        # no skip guard, unlike the parquet/hdf5 tests above.
+        for command in ("rootfileviewer", "rfv"):
+            with self.subTest(command=command):
+                result = self.run_cli(command, str(SAMPLE_NPZ), "--terse")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"summary\tpath\t{SAMPLE_NPZ}", result.stdout)
+                self.assertIn("summary\tformat\tnumpy", result.stdout)
+                self.assertIn("object\tpt\tfloat64[2000]\tentries=2000", result.stdout)
+                self.assertIn("object\ttracks_energy\tragged<float64>[2000]\tentries=2000", result.stdout)
+
+    def test_both_commands_read_the_sample_npy_file(self) -> None:
+        for command in ("rootfileviewer", "rfv"):
+            with self.subTest(command=command):
+                result = self.run_cli(command, str(SAMPLE_NPY), "--terse")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"summary\tpath\t{SAMPLE_NPY}", result.stdout)
+                self.assertIn("object\tsample\tfloat64[2000]\tentries=2000", result.stdout)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,14 @@
 # rootfileviewer
 
 Inspect a [ROOT](https://root.cern), [Parquet](https://parquet.apache.org),
-or [HDF5](https://www.hdfgroup.org/solutions/hdf5/) file's contents from the
-terminal — object hierarchy, branches/columns/datasets, and file-level
-stats — using [`uproot`](https://github.com/scikit-hep/uproot5) (bundled),
+[HDF5](https://www.hdfgroup.org/solutions/hdf5/), or [numpy](https://numpy.org)
+(`.npy`/`.npz`) file's contents from the terminal — object hierarchy,
+branches/columns/datasets/arrays, and file-level stats — using
+[`uproot`](https://github.com/scikit-hep/uproot5) (bundled),
 [`pyarrow`](https://arrow.apache.org/docs/python/) (optional, for Parquet),
-and [`h5py`](https://www.h5py.org/) (optional, for HDF5), with no PyROOT/ROOT
-installation required.
+and [`h5py`](https://www.h5py.org/) (optional, for HDF5) — numpy support
+needs no extra install at all, since `numpy` is already a dependency of
+`uproot` itself — with no PyROOT/ROOT installation required.
 
 - **One-shot mode** (default): prints a summary panel, an ASCII object tree,
   and per-`TTree`/per-Parquet-column tables, rendered with [`rich`](https://github.com/Textualize/rich).
@@ -17,11 +19,12 @@ installation required.
   [`textual-plotext`](https://github.com/Textualize/textual-plotext)/[`plotext`](https://github.com/piccolomo/plotext).
   2D/3D histograms aren't plotted yet — the detail panel notes this instead.
   A `TTree`/`TNtuple` node (or a Parquet file's implicit table) expands into
-  its branches/columns — selecting one, or an HDF5 dataset directly, plots
-  its value distribution the same way (vector/jagged branches, Parquet
-  `list<...>` columns, and HDF5 variable-length datasets are all flattened
-  first; very large trees/columns/datasets are capped at 200,000 entries,
-  noted in the detail panel).
+  its branches/columns — selecting one, or an HDF5 dataset or numpy array
+  directly, plots its value distribution the same way (vector/jagged
+  branches, Parquet `list<...>` columns, HDF5 variable-length datasets, and
+  numpy's own ragged object-dtype arrays are all flattened first; very
+  large trees/columns/datasets/arrays are capped at 200,000 entries, noted
+  in the detail panel).
 - **Terse mode** (`--terse`/`-t`): flat, tab-separated, no-color output —
   for piping into `grep`/`awk`/other scripts.
 
@@ -29,6 +32,12 @@ Parquet and HDF5 support are optional extras (see [Install](#install)) — a
 lean `pip install rootfileviewer` covers ROOT files only, so pointing it at
 a `.parquet`/`.h5` file without the matching extra prints clear install
 instructions instead of failing with an import error.
+
+**Security note**: `.npy`/`.npz` files containing ragged (variable-length)
+arrays are loaded via Python's `pickle` mechanism under the hood — the same
+way `numpy.load` always has for object-dtype arrays — which can execute
+arbitrary code embedded in the file. Only open `.npy`/`.npz` files from
+sources you trust.
 
 ## Install
 
@@ -43,8 +52,9 @@ and `rfvt examples/sample.root` work anywhere the long forms do.
 
 The base install only pulls in `uproot` (and `rich`/`textual`/`plotext` for
 rendering) — it does **not** require `pyarrow` or `h5py`, so it stays lean if
-you only ever open `.root` files. Parquet and HDF5 support are optional
-extras:
+you only ever open `.root` files. `.npy`/`.npz` files work out of the box
+too, no extra needed (`numpy` is already `uproot`'s own dependency). Parquet
+and HDF5 support are optional extras:
 
 ```bash
 pip install 'rootfileviewer[parquet]'   # adds pyarrow, for .parquet/.pq files
@@ -101,6 +111,14 @@ dataset (a per-event list of track energies — HDF5's analogue of a jagged
 ROOT branch or a Parquet `list<double>` column), and a subgroup `aux` holding
 a `run_number` dataset, so it maps onto `sample.root`'s shape almost exactly
 (HDF5 Groups are real directories, just like ROOT's).
+
+The numpy examples use [`examples/sample.npz`](examples/sample.npz) and
+[`examples/sample.npy`](examples/sample.npy) (regenerate both with
+`python examples/make_sample_npz.py`) — `sample.npz` holds the same
+`pt`/`eta`/`n_jets` arrays plus a ragged `tracks_energy` array (numpy's own
+object-dtype representation of per-event variable-length data — no HDF5/
+Parquet needed to see the "flatten a jagged array" feature in action);
+`sample.npy` is just the `pt` array on its own, to show the single-array case.
 
 Clone the repo and run these directly:
 
@@ -200,6 +218,29 @@ sample.h5
 └── tracks_energy (vlen<float64>[2000])
 ```
 
+numpy files need no extra install at all — arrays are top-level leaves
+directly (`.npz`'s several independent arrays have no shared row count to
+group under a wrapper, unlike Parquet/HDF5), with the ragged array's dtype
+shown as `ragged<float64>` rather than the less useful raw `object`:
+
+```bash
+rootfileviewer examples/sample.npz
+```
+
+```
+╭─── numpy file summary ────╮
+│ File: examples/sample.npz │
+│ Size: 137.2 KB            │
+│ numpy: 2.5.2              │
+│ Arrays: 4                 │
+╰───────────────────────────╯
+sample.npz
+├── pt (float64[2000])
+├── eta (float64[2000])
+├── n_jets (int32[2000])
+└── tracks_energy (ragged<float64>[2000])
+```
+
 Other one-shot flags:
 
 ```bash
@@ -227,6 +268,15 @@ above):
 ```bash
 rootfileviewer examples/sample.h5 --depth 0          # don't recurse into aux/
 rootfileviewer examples/sample.h5 --filter 'pt|eta'  # only pt/eta datasets
+```
+
+For numpy files, `--filter` matches array names (meaningful for a `.npz`'s
+several arrays; for a single `.npy` there's only its own name to match),
+`--depth` is a no-op (flat, no nesting), and `--no-branches` is also a
+no-op, same reasoning as HDF5:
+
+```bash
+rootfileviewer examples/sample.npz --filter 'pt|eta'  # only pt/eta arrays
 ```
 
 ### Interactive TUI
@@ -435,6 +485,39 @@ Note the detail panel shows `branch`/`type` labels for a selected column or
 dataset (reused verbatim from the ROOT branch code path) rather than
 "column"/"dataset" — harmless, cosmetic, and left as-is.
 
+numpy arrays are directly selectable at the top level too, including a
+ragged one — the same flattening as above, this time from numpy's own
+object-dtype representation of jagged data rather than HDF5's variable-length
+datasets:
+
+```bash
+rootfileviewer examples/sample.npz --tui
+```
+
+<details>
+<summary>Selecting the <code>tracks_energy</code> array (ragged, per-event track energies) — exact terminal capture</summary>
+
+```
+                                 tracks_energy                           
+     ┌──────────────────────────────────────────────────────────────────┐
+884.0┤    ████                                                          │
+     │  ████████                                                        │
+736.7┤  ████████                                                        │
+     │  ████████                                                        │
+589.3┤  ██████████                                                      │
+442.0┤████████████                                                      │
+     │██████████████                                                    │
+294.7┤████████████████                                                  │
+     │██████████████████                                                │
+147.3┤█████████████████████                                             │
+     │███████████████████████████                                       │
+  0.0┤██████████████████████████████████████████████                 ███│
+     └──────────────┬───────────────────────────┬───────────────────────┘
+            32.22621781997678           96.39569154301864
+```
+
+</details>
+
 ### Terse mode
 
 `--terse`/`-t` prints flat, tab-separated lines instead of panels/trees/tables —
@@ -520,15 +603,35 @@ object	pt	float64[2000]	entries=2000
 object	tracks_energy	vlen<float64>[2000]	entries=2000
 ```
 
+numpy output is the same story as HDF5 — each array is already its own
+`object` row, no `branch`-tag rows needed:
+
+```bash
+rootfileviewer examples/sample.npz -t
+```
+
+```
+summary	path	examples/sample.npz
+summary	format	numpy
+summary	size_bytes	140475
+summary	numpy_version	2.5.2
+summary	num_arrays	4
+summary	total_keys	4
+object	pt	float64[2000]	entries=2000
+object	eta	float64[2000]	entries=2000
+object	n_jets	int32[2000]	entries=2000
+object	tracks_energy	ragged<float64>[2000]	entries=2000
+```
+
 ### Options
 
 | Flag              | Description                                             |
 |-------------------|----------------------------------------------------------|
 | `--tui`           | launch the interactive textual TUI instead of printing (same as running `rfvt`) |
 | `--terse`, `-t`   | flat, tab-separated output with no borders/colors        |
-| `--depth N`       | limit directory recursion depth (ROOT, HDF5 — no-op for Parquet, which has no subdirectories) |
-| `--filter REGEX`  | only show keys/group/dataset names matching REGEX (ROOT, HDF5) or column names matching REGEX (Parquet) |
-| `--no-branches`   | skip per-TTree/per-Parquet branch or column tables in one-shot/terse mode (no-op for HDF5 — nothing separate to skip) |
+| `--depth N`       | limit directory recursion depth (ROOT, HDF5 — no-op for Parquet/numpy, which are flat) |
+| `--filter REGEX`  | only show keys/group/dataset names matching REGEX (ROOT, HDF5), column names (Parquet), or array names (numpy) |
+| `--no-branches`   | skip per-TTree/per-Parquet branch or column tables in one-shot/terse mode (no-op for HDF5/numpy — nothing separate to skip) |
 
 ## License
 

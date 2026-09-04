@@ -45,6 +45,17 @@ BACKENDS: tuple[BackendSpec, ...] = (
         extra="hdf5",
         packages=("h5py",),
     ),
+    BackendSpec(
+        name="numpy",
+        extensions=(".npy", ".npz"),
+        module="rootfileviewer.backends.numpy_arrays",
+        extra="numpy",
+        # numpy is always present already (it's uproot's own dependency), so
+        # this never actually gates anything -- no [numpy] extras group
+        # exists in pyproject.toml either. .npy/.npz support works out of
+        # the box with the base install.
+        packages=(),
+    ),
 )
 
 

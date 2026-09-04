@@ -37,6 +37,14 @@ def render_cli(path: str, nodes: list[Node], summary: dict, show_branches: bool 
             f"[bold]Datasets:[/bold] {summary['num_datasets']}"
         )
         panel_title = "HDF5 file summary"
+    elif fmt == "numpy":
+        summary_lines = (
+            f"[bold]File:[/bold] {summary['path']}\n"
+            f"[bold]Size:[/bold] {human_size(summary['size_bytes'])}\n"
+            f"[bold]numpy:[/bold] {summary['numpy_version']}\n"
+            f"[bold]Arrays:[/bold] {summary['num_arrays']}"
+        )
+        panel_title = "numpy file summary"
     else:
         summary_lines = (
             f"[bold]File:[/bold] {summary['path']}\n"
