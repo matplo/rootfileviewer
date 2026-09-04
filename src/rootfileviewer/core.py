@@ -212,12 +212,35 @@ def branch_histogram_data(
     if len(arr) == 0:
         raise ValueError(f"branch '{branch.name}' has no values to plot")
 
+    flattened_len = len(arr)  # before any non-finite filtering below, for the "(flattened)" note
+
+    # np.histogram() computes bin edges in the *input array's own dtype* --
+    # for a narrow type like float16 that's a real problem even with no
+    # actual inf/nan in the data: two finite-but-large float16 edges can
+    # overflow float16's ~65504 max when core.py itself adds them together
+    # below to get bin centers, producing inf and crashing plotext's tick
+    # rendering downstream. Upcasting first keeps that arithmetic in
+    # float64, where it has ample headroom.
+    arr = arr.astype(np.float64, copy=False)
+
+    # A column can also contain genuine inf/nan values (e.g. from an
+    # overflowed float16 source, or an actual NaN sentinel) -- histogramming
+    # those directly makes np.histogram's autodetected range non-finite.
+    finite_mask = np.isfinite(arr)
+    n_nonfinite = flattened_len - int(finite_mask.sum())
+    if n_nonfinite:
+        arr = arr[finite_mask]
+    if len(arr) == 0:
+        raise ValueError(f"branch '{branch.name}' has only non-finite (inf/nan) values to plot")
+
     values, edges = np.histogram(arr, bins=bins)
     centers = [(edges[i] + edges[i + 1]) / 2 for i in range(len(values))]
 
     note = f"{entry_stop:,}/{total:,} entries" if entry_stop < total else f"{total:,} entries"
-    if len(arr) != entry_stop:
-        note += f", {len(arr):,} values (flattened)"
+    if flattened_len != entry_stop:
+        note += f", {flattened_len:,} values (flattened)"
+    if n_nonfinite:
+        note += f", {n_nonfinite:,} non-finite excluded"
     return centers, [float(v) for v in values], note
 
 
