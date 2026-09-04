@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rootfileviewer.core import branch_histogram_data, node_facts
+from rootfileviewer.core import branch_histogram_data, branch_nodes, node_facts
 
 HAVE_H5PY = importlib.util.find_spec("h5py") is not None
 
@@ -95,12 +95,32 @@ class HDF5BackendTests(unittest.TestCase):
         self.assertEqual(len(centers), 30)
         self.assertEqual(note, "5 entries")
 
-    def test_multidim_dataset_is_flattened_across_extra_axes(self) -> None:
+    def test_narrow_multidim_dataset_without_an_attr_splits_into_generic_columns(self) -> None:
+        # No matching *_features attribute exists here -- but a (3, 2)
+        # dataset's 2 last-axis entries still probably aren't one
+        # homogeneous blob, so this should split with generic names rather
+        # than flattening everything together.
         path = self._write({"grid": [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]})
-        dataset = self._dataset(path, "grid")
+        from rootfileviewer.backends.hdf5 import walk
+
+        node = walk(path)[0]
+        self.assertEqual(node.classname, "HDF5FeatureSet")
+        self.assertTrue(node.is_tree)
+        columns = {b.name: b for b in branch_nodes(node.obj)}
+        self.assertEqual(set(columns), {"column_0", "column_1"})
+        centers, values, note = branch_histogram_data(columns["column_0"].obj)
+        self.assertEqual(note, "3 entries")
+
+    def test_wide_multidim_dataset_still_flattens(self) -> None:
+        # A last axis wider than MAX_SPLIT_COLUMNS is presumed genuinely
+        # homogeneous -- flattening stays the right default there.
+        import numpy as np
+
+        path = self._write({"wide": np.arange(3 * 25, dtype="float64").reshape(3, 25)})
+        dataset = self._dataset(path, "wide")
         self.assertEqual(dataset.num_entries, 3)
         centers, values, note = branch_histogram_data(dataset)
-        self.assertEqual(note, "3 entries, 6 values (flattened)")
+        self.assertEqual(note, "3 entries, 75 values (flattened)")
 
     def test_node_facts_reports_entries_for_a_leaf_dataset(self) -> None:
         from rootfileviewer.backends.hdf5 import walk
@@ -145,10 +165,11 @@ class HDF5BackendTests(unittest.TestCase):
         node = walk(path)[0]
         self.assertEqual({b.name for b in node.obj.branches}, {"pt", "eta", "phi"})
 
-    def test_mismatched_length_feature_attr_is_ignored(self) -> None:
+    def test_mismatched_length_feature_attr_falls_back_to_generic_columns(self) -> None:
         # An attr that doesn't match the last axis's length is a false
-        # positive -- fall back to the plain flatten-everything behavior
-        # rather than guessing.
+        # positive for real names -- don't guess at a name that's provably
+        # wrong, but a (2, 3) shape still qualifies for the same generic
+        # column split a missing attribute would get.
         import h5py
         import numpy as np
 
@@ -160,8 +181,8 @@ class HDF5BackendTests(unittest.TestCase):
         from rootfileviewer.backends.hdf5 import walk
 
         node = walk(path)[0]
-        self.assertNotEqual(node.classname, "HDF5FeatureSet")
-        self.assertTrue(node.is_branch)
+        self.assertEqual(node.classname, "HDF5FeatureSet")
+        self.assertEqual({b.name for b in branch_nodes(node.obj)}, {"column_0", "column_1", "column_2"})
 
     def test_1d_dataset_is_never_split_even_with_a_matching_attr(self) -> None:
         import h5py

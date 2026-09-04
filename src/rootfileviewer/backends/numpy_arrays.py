@@ -22,7 +22,7 @@ import re
 
 import numpy as np
 
-from rootfileviewer.backends._common import is_structured, to_awkward
+from rootfileviewer.backends._common import MAX_SPLIT_COLUMNS, is_structured, to_awkward
 from rootfileviewer.core import Node
 
 
@@ -74,6 +74,60 @@ class NpyArray:
         return flat
 
 
+class NpyColumn:
+    """Duck-types a TBranch: one column sliced out of a multi-dim array's
+    last axis (e.g. data[:, 1]). No real name is available -- numpy files
+    carry no per-array attribute metadata the way HDF5 does -- so it's
+    labeled generically ("column_<i>")."""
+
+    def __init__(self, get, index: int, dtype, num_entries: int):
+        self._get = get
+        self._index = index
+        self.name = f"column_{index}"
+        self.typename = str(dtype)
+        self.num_entries = num_entries
+
+    def array(self, library: str = "np", entry_stop: int | None = None):
+        if library not in ("np", "ak"):
+            raise ValueError(f"unsupported library {library!r} for '{self.name}'")
+        arr = self._get()
+        if is_structured(arr):
+            raise ValueError(f"array has a structured dtype {arr.dtype} and is not supported")
+
+        n = self.num_entries if entry_stop is None else min(entry_stop, self.num_entries)
+        flat = np.asarray(arr[:n, ..., self._index]).reshape(-1)
+
+        if library == "ak":
+            return to_awkward(flat)
+        return flat
+
+
+class NpyColumnSet:
+    """Duck-types a TTree: a multi-dim array whose last axis is narrow
+    enough (see MAX_SPLIT_COLUMNS) to split into individually selectable/
+    plottable NpyColumn leaves instead of being flattened together."""
+
+    def __init__(self, get, shape: tuple[int, ...], dtype):
+        self.num_entries = shape[0]
+        self._get = get
+        self._n_columns = shape[-1]
+        self._dtype = dtype
+
+    @property
+    def branches(self) -> list[NpyColumn]:
+        return [NpyColumn(self._get, i, self._dtype, self.num_entries) for i in range(self._n_columns)]
+
+
+def _make_node(name: str, get, dtype, shape: tuple[int, ...]) -> Node:
+    """A plain is_branch=True leaf for a flat (or wide-last-axis) array; a
+    NpyColumnSet "table" node when the last axis is narrow enough that
+    splitting it into columns beats flattening everything together."""
+    if len(shape) >= 2 and shape[-1] <= MAX_SPLIT_COLUMNS and not is_structured(dtype):
+        return Node(name=name, classname="NpyColumnSet", obj=NpyColumnSet(get, shape, dtype))
+    wrapper = NpyArray(name, get, dtype, shape)
+    return Node(name=name, classname=wrapper.typename, obj=wrapper, is_branch=True)
+
+
 def walk(path: str, depth: int | None = None, name_filter: str | None = None) -> list[Node]:
     # depth is accepted for interface uniformity with other backends
     # (cli.py's single call site passes it unconditionally) but is a no-op
@@ -91,16 +145,14 @@ def walk(path: str, depth: int | None = None, name_filter: str | None = None) ->
             # once here (rather than a fresh read per array() call) means
             # walk() pays this cost once, not twice.
             arr = npz[key]
-            wrapper = NpyArray(key, (lambda a=arr: a), arr.dtype, arr.shape)
-            nodes.append(Node(name=key, classname=wrapper.typename, obj=wrapper, is_branch=True))
+            nodes.append(_make_node(key, (lambda a=arr: a), arr.dtype, arr.shape))
         return nodes
 
     arr = np.load(path, mmap_mode="r", allow_pickle=True)
     name = os.path.splitext(os.path.basename(path))[0]
     if pattern and not pattern.search(name):
         return []
-    wrapper = NpyArray(name, (lambda: arr), arr.dtype, arr.shape)
-    return [Node(name=name, classname=wrapper.typename, obj=wrapper, is_branch=True)]
+    return [_make_node(name, (lambda: arr), arr.dtype, arr.shape)]
 
 
 def summary(path: str, nodes: list[Node]) -> dict:

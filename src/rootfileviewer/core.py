@@ -38,11 +38,16 @@ class Node:
     def is_tree(self) -> bool:
         # ParquetTable/DataFrameTable are synthetic classnames (see
         # backends/parquet.py, backends/pandas_tables.py) standing in for a
-        # whole file's implicit flat table. HDF5FeatureSet (backends/hdf5.py)
-        # is a real HDF5 dataset whose last axis has named features, treated
-        # as a small table of columns rather than one flattened blob. All
-        # three reuse this same branch-expansion/plotting machinery.
-        return self.classname in ("TTree", "TNtuple", "ParquetTable", "DataFrameTable", "HDF5FeatureSet")
+        # whole file's implicit flat table. HDF5FeatureSet/NpyColumnSet
+        # (backends/hdf5.py, backends/numpy_arrays.py) are a real dataset/
+        # array whose last axis holds several distinct quantities (named,
+        # for HDF5, or generic column_N labels when there's no attribute to
+        # name them from), treated as a small table of columns rather than
+        # one flattened blob. All reuse this same branch-expansion/plotting
+        # machinery.
+        return self.classname in (
+            "TTree", "TNtuple", "ParquetTable", "DataFrameTable", "HDF5FeatureSet", "NpyColumnSet",
+        )
 
     @property
     def is_hist(self) -> bool:

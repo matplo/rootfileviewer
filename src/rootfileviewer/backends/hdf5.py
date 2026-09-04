@@ -28,7 +28,7 @@ import re
 import h5py
 import numpy as np
 
-from rootfileviewer.backends._common import is_structured, to_awkward
+from rootfileviewer.backends._common import MAX_SPLIT_COLUMNS, is_structured, to_awkward
 from rootfileviewer.core import Node
 
 # Attribute names tried, in order, to find per-feature names for a dataset's
@@ -186,6 +186,19 @@ def walk(path: str, depth: int | None = None, name_filter: str | None = None) ->
                 nodes.append(node)
             elif isinstance(obj, h5py.Dataset):
                 feature_names = _find_feature_names(obj)
+                if (
+                    feature_names is None
+                    and obj.ndim >= 2
+                    and obj.shape[-1] <= MAX_SPLIT_COLUMNS
+                    and not is_structured(obj.dtype)
+                ):
+                    # No real name found, but the shape still looks like a
+                    # handful of distinct quantities rather than one
+                    # homogeneous blob -- split with generic names rather
+                    # than flattening them all together (same reasoning as
+                    # backends/numpy_arrays.py's NpyColumnSet, which has no
+                    # attribute mechanism to find real names from at all).
+                    feature_names = [f"column_{i}" for i in range(obj.shape[-1])]
                 if feature_names:
                     feature_set = HDF5FeatureSet(obj, feature_names)
                     nodes.append(Node(name=key, classname="HDF5FeatureSet", obj=feature_set))

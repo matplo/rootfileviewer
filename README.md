@@ -133,8 +133,12 @@ The numpy examples use [`examples/sample.npz`](examples/sample.npz) and
 `python examples/make_sample_npz.py`) — `sample.npz` holds the same
 `pt`/`eta`/`n_jets` arrays plus a ragged `tracks_energy` array (numpy's own
 object-dtype representation of per-event variable-length data — no HDF5/
-Parquet needed to see the "flatten a jagged array" feature in action);
-`sample.npy` is just the `pt` array on its own, to show the single-array case.
+Parquet needed to see the "flatten a jagged array" feature in action) and a
+`hits` array (2,000 entries, 3 columns) with no name for any of its 3
+columns — `.npz`/`.npy` have no attribute mechanism the way HDF5 does — see
+[Named-feature datasets](#named-feature-datasets)'s generic-column-splitting
+note; `sample.npy` is just the `pt` array on its own, to show the
+single-array case.
 
 The pandas examples use [`examples/sample.csv`](examples/sample.csv),
 [`sample.feather`](examples/sample.feather), [`sample.pkl`](examples/sample.pkl),
@@ -273,12 +277,39 @@ rootfileviewer examples/sample.h5
 └────────┴─────────┘
 ```
 
-A dataset whose last axis doesn't have a matching (correctly-sized)
-features/columns/labels attribute — like `pt`/`eta`/`n_jets` above — keeps
-the original flatten-everything behavior unchanged; this is purely additive.
-A 3D `(events, particles, features)` shape (not shown here) works the same
-way, with each named column still 2D and flattened across the middle axis
-when plotted, same as an unsplit multi-dim dataset.
+A 1D dataset — like `pt`/`eta`/`n_jets` above — is never affected by any of
+this (there's no "last axis of features" to split); it keeps the original
+flatten-everything behavior. A 3D `(events, particles, features)` shape
+(not shown here) works the same way as the 2D case, with each named column
+still 2D and flattened across the middle axis when plotted, same as an
+unsplit multi-dim dataset.
+
+**Generic columns, when there's no name to use.** A multi-dim dataset with
+no matching (or a wrong-length) features/columns/labels attribute still
+gets split, using generic `column_0`/`column_1`/... labels instead of real
+names — *unless* its last axis is wider than 20 entries, which is presumed
+to be genuinely homogeneous data (e.g. a 128-dim embedding) where flattening
+is still the more sensible default. `.npz`/`.npy` files have no attribute
+mechanism at all, so this generic fallback is the *only* splitting numpy
+ever gets — demonstrated by `sample.npz`'s own `hits` array (3 unnamed
+columns):
+
+```bash
+rootfileviewer examples/sample.npz
+```
+
+```
+└── hits (NpyColumnSet) - 2,000 entries, 3 columns
+ Table: hits  (2,000  
+       entries)       
+┏━━━━━━━━━━┳━━━━━━━━━┓
+┃ Column   ┃ Type    ┃
+┡━━━━━━━━━━╇━━━━━━━━━┩
+│ column_0 │ float32 │
+│ column_1 │ float32 │
+│ column_2 │ float32 │
+└──────────┴─────────┘
+```
 
 numpy files need no extra install at all — arrays are top-level leaves
 directly (`.npz`'s several independent arrays have no shared row count to
@@ -292,16 +323,20 @@ rootfileviewer examples/sample.npz
 ```
 ╭─── numpy file summary ────╮
 │ File: examples/sample.npz │
-│ Size: 137.2 KB            │
+│ Size: 160.9 KB            │
 │ numpy: 2.5.2              │
-│ Arrays: 4                 │
+│ Arrays: 5                 │
 ╰───────────────────────────╯
 sample.npz
 ├── pt (float64[2000])
 ├── eta (float64[2000])
 ├── n_jets (int32[2000])
-└── tracks_energy (ragged<float64>[2000])
+├── tracks_energy (ragged<float64>[2000])
+└── hits (NpyColumnSet) - 2,000 entries, 3 columns
 ```
+
+(`hits`'s own column table is shown further above, in
+[Named-feature datasets](#named-feature-datasets).)
 
 pandas-readable files (CSV, pickle, Feather, JSON Lines) share the same
 `DataFrameTable` wrapper node as Parquet — once the `[pandas]` extra is
@@ -364,8 +399,9 @@ rootfileviewer examples/sample.h5 --filter 'pt|eta'  # only pt/eta datasets
 
 For numpy files, `--filter` matches array names (meaningful for a `.npz`'s
 several arrays; for a single `.npy` there's only its own name to match),
-`--depth` is a no-op (flat, no nesting), and `--no-branches` is also a
-no-op, same reasoning as HDF5:
+`--depth` is a no-op (flat, no nesting), and `--no-branches` is a no-op for
+a plain array but does skip a column-split one's table (like `hits`), same
+reasoning as HDF5:
 
 ```bash
 rootfileviewer examples/sample.npz --filter 'pt|eta'  # only pt/eta arrays
@@ -650,6 +686,34 @@ rootfileviewer examples/sample.npz --tui
 
 </details>
 
+`hits` (a column-split array with no real names — see
+[Named-feature datasets](#named-feature-datasets)) expands into `column_0`/
+`column_1`/`column_2`, same as `jet`'s named columns did for HDF5:
+
+<details>
+<summary>Selecting <code>column_0</code> under <code>hits</code> — exact terminal capture</summary>
+
+```
+                                   column_0                              
+     ┌──────────────────────────────────────────────────────────────────┐
+194.0┤                              ██████                              │
+     │                            ████████████                          │
+161.7┤                          ██████████████                          │
+     │                          ████████████████                        │
+129.3┤                        ██████████████████                        │
+ 97.0┤                        ████████████████████                      │
+     │                      █████████████████████████                   │
+ 64.7┤                    █████████████████████████████                 │
+     │                 ██████████████████████████████████               │
+ 32.3┤               ██████████████████████████████████████             │
+     │           ██████████████████████████████████████████████         │
+  0.0┤██     ███████████████████████████████████████████████████████████│
+     └───┬────────────────────────────────────┬─────────────────────────┘
+    -16.686344146728516              3.8736101786295567
+```
+
+</details>
+
 For a pandas-readable file, the tree root expands into a `table` node the
 same way Parquet's does — a ragged/list-valued column flattens exactly like
 the numpy/HDF5 cases above:
@@ -843,8 +907,10 @@ branch	jet	eta	float32
 branch	jet	phi	float32
 ```
 
-numpy output is the same story as HDF5 — each array is already its own
-`object` row, no `branch`-tag rows needed:
+numpy output is mostly the same story as HDF5 — a plain array is already
+its own `object` row, no `branch`-tag rows needed — except for a
+column-split array like `hits`, which gets `branch` rows the same way an
+`HDF5FeatureSet` does:
 
 ```bash
 rootfileviewer examples/sample.npz -t
@@ -853,14 +919,18 @@ rootfileviewer examples/sample.npz -t
 ```
 summary	path	examples/sample.npz
 summary	format	numpy
-summary	size_bytes	140475
+summary	size_bytes	164715
 summary	numpy_version	2.5.2
-summary	num_arrays	4
-summary	total_keys	4
+summary	num_arrays	5
+summary	total_keys	5
 object	pt	float64[2000]	entries=2000
 object	eta	float64[2000]	entries=2000
 object	n_jets	int32[2000]	entries=2000
 object	tracks_energy	ragged<float64>[2000]	entries=2000
+object	hits	NpyColumnSet	entries=2000	branches=3
+branch	hits	column_0	float32
+branch	hits	column_1	float32
+branch	hits	column_2	float32
 ```
 
 pandas-readable files share the `branch`-tag output with Parquet (both use
@@ -893,7 +963,7 @@ branch	table	tracks_energy	ragged<float64>
 | `--terse`, `-t`   | flat, tab-separated output with no borders/colors        |
 | `--depth N`       | limit directory recursion depth (ROOT, HDF5 — no-op for Parquet/numpy/pandas, which are flat) |
 | `--filter REGEX`  | only show keys/group/dataset names matching REGEX (ROOT, HDF5), or column/array names (Parquet, numpy, pandas) |
-| `--no-branches`   | skip per-TTree/per-table branch or column tables in one-shot/terse mode (no-op for numpy and a plain HDF5 dataset — nothing separate to skip; still applies to an HDF5 [named-feature dataset](#named-feature-datasets)) |
+| `--no-branches`   | skip per-TTree/per-table branch or column tables in one-shot/terse mode (no-op for a plain HDF5/numpy array — nothing separate to skip; still applies to a column-split array, e.g. an HDF5 [named-feature dataset](#named-feature-datasets) or a numpy one like `hits`) |
 
 ## License
 

@@ -47,14 +47,14 @@ class InstalledCliTests(unittest.TestCase):
         self.assertEqual(entry_points.get("rfvt"), "rootfileviewer.cli:main_tui")
 
     def test_package_version(self) -> None:
-        self.assertEqual(rootfileviewer.__version__, "0.11.0")
+        self.assertEqual(rootfileviewer.__version__, "0.12.0")
 
     def test_all_commands_report_their_invoked_name(self) -> None:
         for command in ("rootfileviewer", "rfv", "rfvt"):
             with self.subTest(command=command):
                 result = self.run_cli(command, "--version")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout.strip(), f"{command} 0.11.0")
+                self.assertEqual(result.stdout.strip(), f"{command} 0.12.0")
 
     def test_both_commands_read_the_sample_file(self) -> None:
         for command in ("rootfileviewer", "rfv"):
@@ -124,6 +124,8 @@ class InstalledCliTests(unittest.TestCase):
                 self.assertIn("summary\tformat\tnumpy", result.stdout)
                 self.assertIn("object\tpt\tfloat64[2000]\tentries=2000", result.stdout)
                 self.assertIn("object\ttracks_energy\tragged<float64>[2000]\tentries=2000", result.stdout)
+                self.assertIn("object\thits\tNpyColumnSet\tentries=2000\tbranches=3", result.stdout)
+                self.assertIn("branch\thits\tcolumn_0\tfloat32", result.stdout)
 
     def test_both_commands_read_the_sample_npy_file(self) -> None:
         for command in ("rootfileviewer", "rfv"):

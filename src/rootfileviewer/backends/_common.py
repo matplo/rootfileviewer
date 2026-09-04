@@ -4,6 +4,16 @@ this module)."""
 
 from __future__ import annotations
 
+MAX_SPLIT_COLUMNS = 20
+"""A multi-dim array's last axis, if no wider than this, is treated as a
+handful of distinct quantities and split into individually plottable
+columns instead of being flattened together (see backends/numpy_arrays.py's
+NpyColumnSet and backends/hdf5.py's generic-fallback use of HDF5FeatureSet).
+Wider than this (e.g. a 128-dim embedding) is presumed to be genuinely
+homogeneous data where flattening is the right default -- there's no way to
+know for certain without real names, so this is a judgment call, not a
+detection."""
+
 
 def to_awkward(arr):
     """numpy array -> awkward Array via a Python-list round trip.
