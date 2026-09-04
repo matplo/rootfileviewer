@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 
 from rootfileviewer.core import (
@@ -13,6 +14,19 @@ from rootfileviewer.core import (
     node_hint,
     tree_branch_info,
 )
+
+
+def _log_axis_ticks(vmin: float, vmax: float, n: int = 5) -> tuple[list[float], list[str]]:
+    """n evenly log-spaced tick values between vmin and vmax (both > 0),
+    with reasonably compact labels -- plotext has no native log-axis
+    support, so a log-scaled plot is rendered by plotting log10(x) and
+    relabeling the ticks with these real (un-transformed) values."""
+    log_min, log_max = math.log10(vmin), math.log10(vmax)
+    if log_max == log_min:
+        values = [vmin]
+    else:
+        values = [10 ** (log_min + i * (log_max - log_min) / (n - 1)) for i in range(n)]
+    return values, [f"{v:.3g}" for v in values]
 
 
 def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
@@ -29,7 +43,11 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
         #detail { width: 55%; border: solid $accent; }
         #histplot { height: 15; border: solid $accent; }
         """
-        BINDINGS = [("q", "quit", "Quit")]
+        BINDINGS = [
+            ("q", "quit", "Quit"),
+            ("x", "toggle_log_x", "Log X"),
+            ("y", "toggle_log_y", "Log Y"),
+        ]
         TITLE = f"rootfileviewer: {os.path.basename(path)}"
 
         def compose(self) -> ComposeResult:
@@ -42,12 +60,23 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
             yield Footer()
 
         def on_mount(self) -> None:
+            self._log_x = False
+            self._log_y = False
+            self._selected_node: Node | None = None
             tree_widget = self.query_one("#tree", TextualTree)
             tree_widget.root.expand()
             self._populate(tree_widget.root, nodes)
             table = self.query_one("#detail", DataTable)
             self._set_table(table, ("Field", "Value"), [(k, str(v)) for k, v in summary.items()])
             self.query_one("#histplot", PlotextPlot).display = False
+
+        def action_toggle_log_x(self) -> None:
+            self._log_x = not self._log_x
+            self._show_node(self._selected_node)
+
+        def action_toggle_log_y(self) -> None:
+            self._log_y = not self._log_y
+            self._show_node(self._selected_node)
 
         @staticmethod
         def _set_table(table: DataTable, headers: tuple[str, str], rows: list[tuple[str, str]]) -> None:
@@ -94,7 +123,10 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
                     child.allow_expand = False
 
         def on_tree_node_selected(self, event) -> None:
-            node: Node | None = event.node.data
+            self._selected_node = event.node.data
+            self._show_node(self._selected_node)
+
+        def _show_node(self, node: Node | None) -> None:
             table = self.query_one("#detail", DataTable)
             plot_widget = self.query_one("#histplot", PlotextPlot)
             plot_widget.display = False
@@ -133,12 +165,51 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
 
             self._set_table(table, ("Field", "Value"), rows)
 
-        @staticmethod
-        def _render_plot(plot_widget: "PlotextPlot", title: str, centers: list[float], values: list[float]) -> None:
+        def _render_plot(
+            self,
+            plot_widget: "PlotextPlot",
+            title: str,
+            centers: list[float],
+            values: list[float],
+        ) -> None:
+            """Bar-plot centers/values, honoring self._log_x/self._log_y.
+
+            plotext has no native log-axis support, so a log axis is faked by
+            plotting log10(x) and relabeling the ticks with the real values
+            (see _log_axis_ticks). log_y treats a zero-count bin as simply
+            absent (no bar) rather than log10(0); log_x requires every
+            center to be positive -- raises ValueError otherwise, caught by
+            the _plot_histogram/_plot_branch callers exactly like any other
+            plotting error.
+            """
             plt = plot_widget.plt
             plt.clear_figure()
-            plt.title(title)
-            plt.bar(centers, values, width=1.0)
+
+            title_suffix = ""
+            x = centers
+            if self._log_x:
+                if any(c <= 0 for c in centers):
+                    raise ValueError("cannot use a log x-axis: bin centers are not all positive")
+                title_suffix += " [log x]"
+                x = [math.log10(c) for c in centers]
+
+            y = values
+            if self._log_y:
+                title_suffix += " [log y]"
+                y = [math.log10(v) if v > 0 else 0.0 for v in values]
+
+            plt.title(title + title_suffix)
+            plt.bar(x, y, width=1.0)
+
+            if self._log_x:
+                tick_values, tick_labels = _log_axis_ticks(min(centers), max(centers))
+                plt.xticks([math.log10(v) for v in tick_values], tick_labels)
+            if self._log_y:
+                positive_values = [v for v in values if v > 0]
+                if positive_values:
+                    tick_values, tick_labels = _log_axis_ticks(min(positive_values), max(positive_values))
+                    plt.yticks([math.log10(v) for v in tick_values], tick_labels)
+
             plot_widget.display = True
             plot_widget.refresh()
 
@@ -155,7 +226,7 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
         def _plot_branch(self, plot_widget: "PlotextPlot", node: Node) -> tuple[str | None, str | None]:
             """Render a branch's value distribution. Returns (sampling note, error message)."""
             try:
-                centers, values, note = branch_histogram_data(node.obj)
+                centers, values, note = branch_histogram_data(node.obj, log_x=self._log_x)
                 self._render_plot(plot_widget, node.name, centers, values)
                 return note, None
             except Exception as exc:

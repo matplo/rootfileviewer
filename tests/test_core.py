@@ -67,6 +67,29 @@ class BranchHistogramDataTests(unittest.TestCase):
         self.assertEqual(len(centers), 30)
         self.assertEqual(note, "5 entries")
 
+    def test_log_x_produces_geometrically_spaced_centers(self) -> None:
+        rng = np.random.default_rng(0)
+        branch = _FakeBranch("vals", rng.exponential(scale=10, size=2000) + 0.1)
+        centers, values, note = branch_histogram_data(branch, log_x=True)
+        self.assertEqual(len(centers), 30)
+        self.assertEqual(note, "2,000 entries")
+        # Equal-width-in-log-space bins -> the ratio between consecutive
+        # centers is constant (not true for linear bins on this data).
+        ratios = [centers[i + 1] / centers[i] for i in range(len(centers) - 1)]
+        self.assertTrue(all(abs(r - ratios[0]) < 1e-9 for r in ratios))
+
+    def test_log_x_rejects_non_positive_values(self) -> None:
+        branch = _FakeBranch("vals", np.array([-1.0, 2.0, 3.0]))
+        with self.assertRaises(ValueError) as ctx:
+            branch_histogram_data(branch, log_x=True)
+        self.assertIn("non-positive", str(ctx.exception))
+
+    def test_log_x_rejects_zero(self) -> None:
+        # A log axis can't represent exactly zero either, not just negatives.
+        branch = _FakeBranch("vals", np.array([0.0, 2.0, 3.0]))
+        with self.assertRaises(ValueError):
+            branch_histogram_data(branch, log_x=True)
+
 
 if __name__ == "__main__":
     unittest.main()

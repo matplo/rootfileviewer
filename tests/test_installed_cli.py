@@ -47,14 +47,14 @@ class InstalledCliTests(unittest.TestCase):
         self.assertEqual(entry_points.get("rfvt"), "rootfileviewer.cli:main_tui")
 
     def test_package_version(self) -> None:
-        self.assertEqual(rootfileviewer.__version__, "0.10.0")
+        self.assertEqual(rootfileviewer.__version__, "0.11.0")
 
     def test_all_commands_report_their_invoked_name(self) -> None:
         for command in ("rootfileviewer", "rfv", "rfvt"):
             with self.subTest(command=command):
                 result = self.run_cli(command, "--version")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout.strip(), f"{command} 0.10.0")
+                self.assertEqual(result.stdout.strip(), f"{command} 0.11.0")
 
     def test_both_commands_read_the_sample_file(self) -> None:
         for command in ("rootfileviewer", "rfv"):

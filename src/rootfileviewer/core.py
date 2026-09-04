@@ -194,12 +194,23 @@ def branch_histogram_data(
     branch,
     max_entries: int = DEFAULT_BRANCH_PLOT_MAX_ENTRIES,
     bins: int = DEFAULT_BRANCH_PLOT_BINS,
+    log_x: bool = False,
 ) -> tuple[list[float], list[float], str]:
     """Bin centers/values (via numpy.histogram) for a TBranch's values, plus a note
     describing how many entries/values were actually used.
 
     Vector/jagged branches are flattened across all their elements first.
     Raises ValueError if the branch has no numeric values to histogram.
+
+    log_x=True bins with logarithmically-spaced edges (equal width in log
+    space) instead of numpy's default linear ones -- for the actual
+    distribution shape to make sense, not just a compressed x-axis, this is
+    a real rebinning, not just a display transform. Raises ValueError if any
+    value is non-positive (a log axis can't represent zero or negative
+    values). Returned centers are the geometric mean of each bin's edges
+    (the correct "middle" in log space), in the branch's own linear units --
+    it's the caller's job to decide how to actually render a log axis with
+    them (this project has no plotting dependency at this layer).
     """
     total = branch.num_entries
     entry_stop = min(total, max_entries)
@@ -235,8 +246,18 @@ def branch_histogram_data(
     if len(arr) == 0:
         raise ValueError(f"branch '{branch.name}' has only non-finite (inf/nan) values to plot")
 
-    values, edges = np.histogram(arr, bins=bins)
-    centers = [(edges[i] + edges[i + 1]) / 2 for i in range(len(values))]
+    if log_x:
+        if np.any(arr <= 0):
+            raise ValueError(f"branch '{branch.name}' has non-positive values; can't use logarithmic bins")
+        bin_edges = np.logspace(np.log10(arr.min()), np.log10(arr.max()), bins + 1)
+    else:
+        bin_edges = bins
+
+    values, edges = np.histogram(arr, bins=bin_edges)
+    if log_x:
+        centers = [float(np.sqrt(edges[i] * edges[i + 1])) for i in range(len(values))]
+    else:
+        centers = [(edges[i] + edges[i + 1]) / 2 for i in range(len(values))]
 
     note = f"{entry_stop:,}/{total:,} entries" if entry_stop < total else f"{total:,} entries"
     if flattened_len != entry_stop:

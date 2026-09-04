@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rootfileviewer"
-version = "0.10.0"
+version = "0.11.0"
 description = "Terminal viewer for ROOT, Parquet, HDF5, numpy, and pandas-readable files — ASCII tree, branch/column tables, and an interactive TUI."
 readme = "README.md"
 license = "MIT"

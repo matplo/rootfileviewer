@@ -388,7 +388,9 @@ rfvt examples/sample.root
 
 Arrow keys navigate the tree on the left; `Enter`/click selects a node and
 updates the panel on the right. Expand `events` to see its branches; select
-`pt_hist` or the `pt` branch to plot it below. `q` quits.
+`pt_hist` or the `pt` branch to plot it below. `q` quits, `x`/`y` toggle a
+logarithmic x-/y-axis on the current plot (see
+[Logarithmic axes](#logarithmic-axes) below).
 
 ```
 ┌─ rootfileviewer: sample.root ──────────────────────────────────────────────────┐
@@ -679,6 +681,75 @@ rootfileviewer examples/sample.pkl --tui
 ```
 
 </details>
+
+#### Logarithmic axes
+
+Press `x` while a plot is showing to toggle a logarithmic x-axis; `y` does
+the same for the y-axis. Both apply to whatever's currently plotted and
+stay on as you select other nodes, across every format. `plotext` has no
+native log-axis support, so this is faked by plotting `log10(x)` and
+relabeling the ticks with the real values — the plot title gets a
+`[log x]`/`[log y]` suffix as a reminder which is active.
+
+For a branch/column/dataset/array (not a pre-binned `TH1` histogram), `x`
+does a **real rebin** with logarithmically-spaced bin edges (equal width in
+log space) — not just a compressed x-axis on the same linear bins — so the
+shape is actually meaningful for data spanning multiple decades, e.g. a
+`pt` spectrum:
+
+<details>
+<summary>The <code>pt</code> branch, linear vs. logarithmic x-axis — exact terminal captures</summary>
+
+```
+                                      pt                                 
+     ┌──────────────────────────────────────────────────────────────────┐
+208.0┤         ███████                                                  │
+     │       ███████████                                                │
+173.3┤       ███████████                                                │
+     │    █████████████████                                             │
+138.7┤    █████████████████                                             │
+104.0┤    █████████████████████                                         │
+     │  ███████████████████████                                         │
+ 69.3┤  █████████████████████████                                       │
+     │  ███████████████████████████                                     │
+ 34.7┤██████████████████████████████████                                │
+     │██████████████████████████████████████████                        │
+  0.0┤██████████████████████████████████████████████████████████████████│
+     └─┬──────────────┬────────────────────────────────────┬────────────┘
+   2.726107417301151 24.772788634441916          78.31472873321235       
+```
+
+```
+                                  pt [log x]                             
+     ┌──────────────────────────────────────────────────────────────────┐
+225.0┤                                           ████                   │
+     │                                           ██████                 │
+187.5┤                                       ████████████               │
+     │                                       ████████████               │
+150.0┤                                     ████████████████             │
+112.5┤                                   ██████████████████             │
+     │                                 ██████████████████████           │
+ 75.0┤                              █████████████████████████           │
+     │                            █████████████████████████████         │
+ 37.5┤                          ██████████████████████████████████      │
+     │                 █████████████████████████████████████████████    │
+  0.0┤██████████████████████████████████████████████████████████████████│
+     └─┬───────────────┬───────────────┬──────────────┬───────────────┬─┘
+     1.24            3.61            10.5           30.5           88.8
+```
+
+</details>
+
+A `TH1`/`TProfile` histogram's bins are already fixed by ROOT — there's no
+raw data left to rebin — so `x` there just re-renders the *existing* bins on
+a log-looking axis rather than truly rebinning them.
+
+`y` never rebins anything (it's the count axis) — an empty bin (0 count)
+simply shows no bar rather than `log10(0)`. `x` needs every plotted value to
+be strictly positive (a log axis can't represent zero or negative numbers);
+if the current data has any zero or negative value, pressing `x` reports a
+`plot error` in the detail panel instead of a broken plot, and `y` isn't
+affected by this restriction at all since counts are never negative.
 
 ### Terse mode
 
