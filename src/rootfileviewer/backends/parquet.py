@@ -18,11 +18,27 @@ from __future__ import annotations
 import os
 import re
 
-import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 from rootfileviewer.core import Node
+
+
+def _rejects_nesting(dtype: pa.DataType) -> bool:
+    """True for types that can't be sensibly flattened to a numeric leaf for
+    plotting, at any depth of list nesting.
+
+    A `list<double>` (or `list<list<double>>`, etc.) column -- the common
+    case for physics data, e.g. a per-event list of track energies -- is
+    fine: it's read via awkward and flattened, exactly like a jagged ROOT
+    branch. `struct`/`map`/`union` columns are rejected because flattening
+    them mixes unrelated fields into one meaningless distribution (verified:
+    `ak.flatten({"a": ..., "b": ...}, axis=None)` interleaves `a` and `b`
+    values rather than raising).
+    """
+    while pa.types.is_list(dtype) or pa.types.is_large_list(dtype) or pa.types.is_fixed_size_list(dtype):
+        dtype = dtype.value_type
+    return pa.types.is_struct(dtype) or pa.types.is_map(dtype) or pa.types.is_union(dtype)
 
 
 class ParquetColumn:
@@ -38,37 +54,41 @@ class ParquetColumn:
     def array(self, library: str = "np", entry_stop: int | None = None):
         if library not in ("np", "ak"):
             raise ValueError(f"unsupported library {library!r} for parquet column '{self.name}'")
-        if pa.types.is_nested(self._field.type):
+        if _rejects_nesting(self._field.type):
             raise ValueError(
-                f"column '{self.name}' has nested type {self._field.type} and is not supported"
+                f"column '{self.name}' has unsupported type {self._field.type} "
+                "(struct/map columns can't be flattened to a single distribution)"
             )
 
         n_needed = self.num_entries if entry_stop is None else min(entry_stop, self.num_entries)
-        if n_needed <= 0:
-            arr = np.array([])
-        else:
-            chunks: list[np.ndarray] = []
+        chunks: list[pa.Array] = []
+        if n_needed > 0:
             total = 0
             for batch in self._pf.iter_batches(batch_size=n_needed, columns=[self.name]):
                 col = batch.column(0)
-                chunks.append(col.to_numpy(zero_copy_only=False))
+                chunks.append(col)
                 total += len(col)
                 if total >= n_needed:
                     break
-            arr = np.concatenate(chunks)[:n_needed] if chunks else np.array([])
+        if not chunks:
+            combined = pa.array([], type=self._field.type)
+        elif len(chunks) == 1:
+            combined = chunks[0]
+        else:
+            combined = pa.concat_arrays(chunks)
+        combined = combined.slice(0, n_needed)
 
         if library == "ak":
             import awkward as ak
 
-            # awkward's Array() constructor rejects numpy object-dtype arrays
-            # outright (e.g. a Parquet string column comes back from to_numpy()
-            # as dtype=object); going through a plain list lets it infer a
-            # proper (string) awkward type instead of raising here. This
-            # column is already flat, so no jagged/nested structure is lost.
-            if arr.dtype == object:
-                return ak.Array(arr.tolist())
-            return ak.Array(arr)
-        return arr
+            # ak.from_arrow (rather than wrapping an already-materialized
+            # numpy array) is what correctly reconstructs list-typed/string
+            # columns -- including genuinely jagged ones like
+            # list<element: double> -- so core.py's `ak.flatten(..., axis=None)`
+            # fallback for non-numeric dtypes works the same as it does for a
+            # jagged ROOT branch.
+            return ak.from_arrow(combined)
+        return combined.to_numpy(zero_copy_only=False)
 
 
 class ParquetTable:
