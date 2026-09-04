@@ -109,6 +109,98 @@ class HDF5BackendTests(unittest.TestCase):
         node = walk(path)[0]
         self.assertEqual(node_facts(node), {"entries": 3})
 
+    def test_root_level_features_attr_splits_dataset_into_named_columns(self) -> None:
+        # The convention used by a real file this was built against: a
+        # `<dataset-name>_features` attribute at the file root, naming each
+        # entry along the dataset's last axis.
+        import h5py
+        import numpy as np
+
+        path = str(Path(tempfile.mkdtemp()) / "test.h5")
+        with h5py.File(path, "w") as f:
+            f.create_dataset("jet", data=np.arange(6, dtype="float32").reshape(2, 3))
+            f.attrs["jet_features"] = ["pt", "eta", "phi"]
+
+        from rootfileviewer.backends.hdf5 import walk
+
+        node = walk(path)[0]
+        self.assertEqual(node.classname, "HDF5FeatureSet")
+        self.assertTrue(node.is_tree)
+        columns = {b.name: b for b in node.obj.branches}
+        self.assertEqual(set(columns), {"pt", "eta", "phi"})
+        centers, values, note = branch_histogram_data(columns["eta"])
+        self.assertEqual(note, "2 entries")
+
+    def test_dataset_level_features_attr_also_splits_columns(self) -> None:
+        import h5py
+        import numpy as np
+
+        path = str(Path(tempfile.mkdtemp()) / "test.h5")
+        with h5py.File(path, "w") as f:
+            ds = f.create_dataset("jet", data=np.arange(6, dtype="float32").reshape(2, 3))
+            ds.attrs["features"] = ["pt", "eta", "phi"]
+
+        from rootfileviewer.backends.hdf5 import walk
+
+        node = walk(path)[0]
+        self.assertEqual({b.name for b in node.obj.branches}, {"pt", "eta", "phi"})
+
+    def test_mismatched_length_feature_attr_is_ignored(self) -> None:
+        # An attr that doesn't match the last axis's length is a false
+        # positive -- fall back to the plain flatten-everything behavior
+        # rather than guessing.
+        import h5py
+        import numpy as np
+
+        path = str(Path(tempfile.mkdtemp()) / "test.h5")
+        with h5py.File(path, "w") as f:
+            f.create_dataset("jet", data=np.arange(6, dtype="float32").reshape(2, 3))
+            f.attrs["jet_features"] = ["only", "two"]  # length 2, but last axis is 3
+
+        from rootfileviewer.backends.hdf5 import walk
+
+        node = walk(path)[0]
+        self.assertNotEqual(node.classname, "HDF5FeatureSet")
+        self.assertTrue(node.is_branch)
+
+    def test_1d_dataset_is_never_split_even_with_a_matching_attr(self) -> None:
+        import h5py
+        import numpy as np
+
+        path = str(Path(tempfile.mkdtemp()) / "test.h5")
+        with h5py.File(path, "w") as f:
+            f.create_dataset("nums", data=np.array([1.0, 2.0, 3.0], dtype="float32"))
+            # Coincidentally matches length 3, but ndim < 2 -- there's no
+            # "last axis" of independent features to split here.
+            f.attrs["nums_features"] = ["a", "b", "c"]
+
+        from rootfileviewer.backends.hdf5 import walk
+
+        node = walk(path)[0]
+        self.assertTrue(node.is_branch)
+        self.assertNotEqual(node.classname, "HDF5FeatureSet")
+
+    def test_3d_dataset_splits_and_flattens_each_named_column(self) -> None:
+        # The real-world shape this was built for: (events, particles,
+        # features) -- each named feature is still 2D per column and needs
+        # flattening across the middle axis, same as an unsplit dataset.
+        import h5py
+        import numpy as np
+
+        rng = np.random.default_rng(0)
+        data = rng.normal(size=(5, 10, 2)).astype("float32")
+        path = str(Path(tempfile.mkdtemp()) / "test.h5")
+        with h5py.File(path, "w") as f:
+            f.create_dataset("particle", data=data)
+            f.attrs["particle_features"] = ["eta", "phi"]
+
+        from rootfileviewer.backends.hdf5 import walk
+
+        node = walk(path)[0]
+        columns = {b.name: b for b in node.obj.branches}
+        centers, values, note = branch_histogram_data(columns["eta"])
+        self.assertEqual(note, "5 entries, 50 values (flattened)")
+
 
 if __name__ == "__main__":
     unittest.main()

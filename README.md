@@ -122,9 +122,11 @@ The HDF5 examples use [`examples/sample.h5`](examples/sample.h5) (regenerate
 it with `python examples/make_sample_hdf5.py`) — the same `pt`/`eta`/`n_jets`
 datasets and 2,000 entries, a `tracks_energy` variable-length ("jagged")
 dataset (a per-event list of track energies — HDF5's analogue of a jagged
-ROOT branch or a Parquet `list<double>` column), and a subgroup `aux` holding
-a `run_number` dataset, so it maps onto `sample.root`'s shape almost exactly
-(HDF5 Groups are real directories, just like ROOT's).
+ROOT branch or a Parquet `list<double>` column), a subgroup `aux` holding a
+`run_number` dataset (so it maps onto `sample.root`'s shape almost exactly —
+HDF5 Groups are real directories, just like ROOT's), and a `jet` dataset
+(500 entries) with a `jet_features` attribute naming its 3 columns
+`pt`/`eta`/`phi` — see [Named-feature datasets](#named-feature-datasets).
 
 The numpy examples use [`examples/sample.npz`](examples/sample.npz) and
 [`examples/sample.npy`](examples/sample.npy) (regenerate both with
@@ -227,18 +229,56 @@ rootfileviewer examples/sample.h5
 ```
 ╭──────── HDF5 file summary ────────╮
 │ File: examples/sample.h5          │
-│ Size: 142.3 KB                    │
+│ Size: 148.2 KB                    │
 │ h5py: 3.16.0   HDF5: 2.0.0        │
-│ Keys: 6   Groups: 1   Datasets: 5 │
+│ Keys: 7   Groups: 1   Datasets: 6 │
 ╰───────────────────────────────────╯
 sample.h5
 ├── aux (HDF5Group)
 │   └── run_number (int32[5])
 ├── eta (float64[2000])
+├── jet (HDF5FeatureSet) - 500 entries, 3 columns
 ├── n_jets (int32[2000])
 ├── pt (float64[2000])
 └── tracks_energy (vlen<float64>[2000])
 ```
+
+#### Named-feature datasets
+
+There's no single universal HDF5 convention for naming the individual
+entries along a dataset's last axis, but a `<dataset-name>_features`
+attribute (either at the file root, or directly on the dataset — both are
+recognized) is one used in the wild — for example, a `(9764, 7)` dataset
+`jet` holding 7 physically distinct quantities per event (energy, angles,
+...), named via a root-level `jet_features` attribute. Without reading that
+attribute, selecting `jet` would only ever flatten all 7 into one
+meaningless combined histogram; with it, `jet` becomes a small table of 7
+individually named, selectable, plottable columns — exactly like a
+`ParquetTable`'s columns, reusing the same machinery. `sample.h5`'s own
+`jet` dataset (3 columns: `pt`/`eta`/`phi`) demonstrates this:
+
+```bash
+rootfileviewer examples/sample.h5
+```
+
+```
+  Table: jet  (500  
+      entries)      
+┏━━━━━━━━┳━━━━━━━━━┓
+┃ Column ┃ Type    ┃
+┡━━━━━━━━╇━━━━━━━━━┩
+│ pt     │ float32 │
+│ eta    │ float32 │
+│ phi    │ float32 │
+└────────┴─────────┘
+```
+
+A dataset whose last axis doesn't have a matching (correctly-sized)
+features/columns/labels attribute — like `pt`/`eta`/`n_jets` above — keeps
+the original flatten-everything behavior unchanged; this is purely additive.
+A 3D `(events, particles, features)` shape (not shown here) works the same
+way, with each named column still 2D and flattened across the middle axis
+when plotted, same as an unsplit multi-dim dataset.
 
 numpy files need no extra install at all — arrays are top-level leaves
 directly (`.npz`'s several independent arrays have no shared row count to
@@ -311,9 +351,11 @@ rootfileviewer examples/sample.parquet --no-branches        # skip the column ta
 
 HDF5 is the one non-ROOT format where `--depth` does something real, since
 Groups genuinely nest — `--filter` matches group/dataset names at every
-level, same as ROOT; `--no-branches` is a no-op (there's no separate table
-to skip — a dataset's dtype/shape is already shown directly in the tree
-above):
+level, same as ROOT; `--no-branches` is a no-op for a plain dataset (there's
+no separate table to skip — its dtype/shape is already shown directly in
+the tree above), but does skip the column table for a
+[named-feature dataset](#named-feature-datasets) like `jet`, same as a
+TTree's branch table:
 
 ```bash
 rootfileviewer examples/sample.h5 --depth 0          # don't recurse into aux/
@@ -542,6 +584,37 @@ Note the detail panel shows `branch`/`type` labels for a selected column or
 dataset (reused verbatim from the ROOT branch code path) rather than
 "column"/"dataset" — harmless, cosmetic, and left as-is.
 
+`jet` (a [named-feature dataset](#named-feature-datasets)) expands into its
+3 named columns just like a TTree expands into branches — selecting one
+plots only that column, not all 3 flattened together:
+
+<details>
+<summary>Selecting the <code>eta</code> column under <code>jet</code> — exact terminal capture</summary>
+
+```
+                                     eta                                 
+    ┌───────────────────────────────────────────────────────────────────┐
+45.0┤                                 ███    ███                        │
+    │                               █████    ███                        │
+37.5┤                             ███████    ███                        │
+    │                      ███    ██████████████                        │
+30.0┤                      █████████████████████                        │
+22.5┤                    █████████████████████████                      │
+    │                  ███████████████████████████                      │
+15.0┤                  ███████████████████████████                      │
+    │             ███████████████████████████████████████               │
+ 7.5┤           █████████████████████████████████████████████           │
+    │         █████████████████████████████████████████████████         │
+ 0.0┤██████████████████████████████████████████████████████████████  ███│
+    └───────────────────────┬───────────────┬───────────────────────┬───┘
+           -1.6425214290618897 1.0974516073862706     5.40312352180481
+```
+
+Detail panel: `sampled: 500 entries` — no other `jet` column's values are
+mixed in.
+
+</details>
+
 numpy arrays are directly selectable at the top level too, including a
 ragged one — the same flattening as above, this time from numpy's own
 object-dtype representation of jagged data rather than HDF5's variable-length
@@ -666,10 +739,13 @@ branch	table	eta	double
 branch	table	n_jets	int32
 ```
 
-HDF5 output needs no `branch`-tag rows at all: unlike a TTree's branches or
-a Parquet table's columns (which live *inside* one enumerable object and
-need a separate listing mechanism), each HDF5 dataset is already its own
-distinct `object` row, wherever it sits in the group hierarchy:
+A plain HDF5 dataset needs no `branch`-tag row at all: unlike a TTree's
+branches or a Parquet table's columns (which live *inside* one enumerable
+object and need a separate listing mechanism), each dataset is already its
+own distinct `object` row, wherever it sits in the group hierarchy. A
+[named-feature dataset](#named-feature-datasets) like `jet` is the
+exception — it's `object`-tagged as an `HDF5FeatureSet`, and its columns get
+`branch` rows the same way a TTree's or DataFrameTable's do:
 
 ```bash
 rootfileviewer examples/sample.h5 -t
@@ -678,18 +754,22 @@ rootfileviewer examples/sample.h5 -t
 ```
 summary	path	examples/sample.h5
 summary	format	hdf5
-summary	size_bytes	145748
+summary	size_bytes	151748
 summary	h5py_version	3.16.0
 summary	hdf5_version	2.0.0
 summary	num_groups	1
-summary	num_datasets	5
-summary	total_keys	6
+summary	num_datasets	6
+summary	total_keys	7
 object	aux	HDF5Group
 object	aux/run_number	int32[5]	entries=5
 object	eta	float64[2000]	entries=2000
+object	jet	HDF5FeatureSet	entries=500	branches=3
 object	n_jets	int32[2000]	entries=2000
 object	pt	float64[2000]	entries=2000
 object	tracks_energy	vlen<float64>[2000]	entries=2000
+branch	jet	pt	float32
+branch	jet	eta	float32
+branch	jet	phi	float32
 ```
 
 numpy output is the same story as HDF5 — each array is already its own
@@ -742,7 +822,7 @@ branch	table	tracks_energy	ragged<float64>
 | `--terse`, `-t`   | flat, tab-separated output with no borders/colors        |
 | `--depth N`       | limit directory recursion depth (ROOT, HDF5 — no-op for Parquet/numpy/pandas, which are flat) |
 | `--filter REGEX`  | only show keys/group/dataset names matching REGEX (ROOT, HDF5), or column/array names (Parquet, numpy, pandas) |
-| `--no-branches`   | skip per-TTree/per-table branch or column tables in one-shot/terse mode (no-op for HDF5/numpy — nothing separate to skip) |
+| `--no-branches`   | skip per-TTree/per-table branch or column tables in one-shot/terse mode (no-op for numpy and a plain HDF5 dataset — nothing separate to skip; still applies to an HDF5 [named-feature dataset](#named-feature-datasets)) |
 
 ## License
 

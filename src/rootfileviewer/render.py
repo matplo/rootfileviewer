@@ -81,11 +81,17 @@ def render_cli(path: str, nodes: list[Node], summary: dict, show_branches: bool 
             # flat table -- see Node.is_tree) get "Table"/"Column" labeling
             # without another edit here.
             is_wrapper_table = node.classname not in ("TTree", "TNtuple")
-            if is_wrapper_table:
-                # There's only ever one (synthetic) table per file for these
-                # backends, so identify it by the file itself rather than the
-                # internal node name ("table"), which would read redundantly.
+            if node.classname in ("ParquetTable", "DataFrameTable"):
+                # These backends synthesize exactly one such node per file,
+                # always named "table" (see backends/parquet.py,
+                # backends/pandas_tables.py) -- identify it by the file
+                # itself rather than that uninformative internal name.
                 label = f"Table: {os.path.basename(path)}"
+            elif is_wrapper_table:
+                # HDF5FeatureSet nodes are real datasets with their own
+                # meaningful name, and a file can have several (e.g. both
+                # "jet" and "particle") -- tree_path already identifies them.
+                label = f"Table: {tree_path}"
             else:
                 label = f"TTree: {tree_path}"
             table = Table(title=f"{label}  ({node.obj.num_entries:,} entries)")

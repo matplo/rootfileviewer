@@ -47,14 +47,14 @@ class InstalledCliTests(unittest.TestCase):
         self.assertEqual(entry_points.get("rfvt"), "rootfileviewer.cli:main_tui")
 
     def test_package_version(self) -> None:
-        self.assertEqual(rootfileviewer.__version__, "0.9.1")
+        self.assertEqual(rootfileviewer.__version__, "0.10.0")
 
     def test_all_commands_report_their_invoked_name(self) -> None:
         for command in ("rootfileviewer", "rfv", "rfvt"):
             with self.subTest(command=command):
                 result = self.run_cli(command, "--version")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout.strip(), f"{command} 0.9.1")
+                self.assertEqual(result.stdout.strip(), f"{command} 0.10.0")
 
     def test_both_commands_read_the_sample_file(self) -> None:
         for command in ("rootfileviewer", "rfv"):
@@ -103,6 +103,8 @@ class InstalledCliTests(unittest.TestCase):
                 self.assertIn("object\taux\tHDF5Group", result.stdout)
                 self.assertIn("object\tpt\tfloat64[2000]\tentries=2000", result.stdout)
                 self.assertIn("object\ttracks_energy\tvlen<float64>[2000]\tentries=2000", result.stdout)
+                self.assertIn("object\tjet\tHDF5FeatureSet\tentries=500\tbranches=3", result.stdout)
+                self.assertIn("branch\tjet\teta\tfloat32", result.stdout)
 
     @unittest.skipIf(HAVE_H5PY, "h5py is installed; this exercises the missing-dependency path")
     def test_hdf5_file_without_h5py_reports_install_instructions(self) -> None:

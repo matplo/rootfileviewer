@@ -4,7 +4,11 @@
 Same pt/eta/n_jets columns and RNG seed as make_sample.py's `events` TTree,
 plus a jagged (variable-length) tracks_energy dataset and a subgroup, to
 mirror sample.root's shape (a tree, a jagged-analogue, a subdirectory) as
-closely as HDF5's own model allows. Run from the repo root:
+closely as HDF5's own model allows. Also includes a `jet` dataset with a
+`jet_features` attribute naming its columns, demonstrating the named-feature
+column-splitting behavior (there's no single universal HDF5 convention for
+this, but a `<dataset-name>_features` attribute is one used in the wild).
+Run from the repo root:
     python examples/make_sample_hdf5.py
 """
 
@@ -37,6 +41,16 @@ def main() -> None:
 
         aux = f.create_group("aux")
         aux.create_dataset("run_number", data=np.full(5, 367123, dtype="int32"))
+
+        # A (events, features) dataset with named columns via an attribute --
+        # gets split into individually selectable/plottable columns instead
+        # of one flattened blob (see backends/hdf5.py's _find_feature_names).
+        jet_pt = rng.gamma(shape=3.0, scale=5.0, size=500)
+        jet_eta = rng.normal(0, 2.0, 500)
+        jet_phi = rng.uniform(-np.pi, np.pi, 500)
+        jet = np.stack([jet_pt, jet_eta, jet_phi], axis=1).astype("float32")
+        f.create_dataset("jet", data=jet)
+        f.attrs["jet_features"] = ["pt", "eta", "phi"]
 
     print(f"wrote {OUT}")
 
