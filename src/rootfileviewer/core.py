@@ -33,7 +33,10 @@ class Node:
 
     @property
     def is_tree(self) -> bool:
-        return self.classname in ("TTree", "TNtuple")
+        # ParquetTable is a synthetic classname (see backends/parquet.py)
+        # standing in for a whole Parquet file's implicit flat table, so it
+        # can reuse this same branch-expansion/plotting machinery.
+        return self.classname in ("TTree", "TNtuple", "ParquetTable")
 
     @property
     def is_hist(self) -> bool:
@@ -92,6 +95,7 @@ def file_summary(uproot_file, path: str, nodes: list[Node]) -> dict:
     total_keys = sum(counts.values())
     return {
         "path": path,
+        "format": "root",
         "size_bytes": os.path.getsize(path),
         "uproot_version": uproot.__version__,
         "compression": str(uproot_file.file.compression),
@@ -134,7 +138,8 @@ def node_hint(node: Node) -> str:
     if node.is_tree:
         if "entries" not in facts:
             return ""
-        return f"{facts['entries']:,} entries, {facts['branches']} branches"
+        unit = "columns" if node.classname == "ParquetTable" else "branches"
+        return f"{facts['entries']:,} entries, {facts['branches']} {unit}"
     if node.is_hist:
         if "bins" not in facts:
             return ""

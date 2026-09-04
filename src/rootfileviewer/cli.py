@@ -8,23 +8,46 @@ import sys
 
 import uproot
 
+from rootfileviewer.backends import MissingBackendError, find_backend, load_backend
 from rootfileviewer.core import file_summary, walk_directory
+
+
+def _dispatch(args, path: str, nodes, summary: dict) -> None:
+    """Run the requested output mode (TUI/terse/one-shot) against nodes/summary."""
+    if args.tui:
+        from rootfileviewer.tui import run_tui
+
+        run_tui(path, nodes, summary)
+    elif args.terse:
+        from rootfileviewer.render import render_terse
+
+        render_terse(path, nodes, summary, show_branches=not args.no_branches)
+    else:
+        from rootfileviewer.render import render_cli
+
+        render_cli(path, nodes, summary, show_branches=not args.no_branches)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Inspect a ROOT file's contents in the terminal (via uproot).",
+        description="Inspect a ROOT or Parquet file's contents in the terminal (via uproot/pyarrow).",
     )
-    parser.add_argument("rootfile", help="path to the .root file")
+    parser.add_argument("rootfile", help="path to the .root or .parquet file")
     parser.add_argument("--tui", action="store_true", help="launch interactive textual TUI instead of one-shot print")
     parser.add_argument(
         "--terse", "-t",
         action="store_true",
         help="plain, tab-separated output with no borders/colors, for scripts/grep/awk",
     )
-    parser.add_argument("--depth", type=int, default=None, help="limit directory recursion depth")
-    parser.add_argument("--filter", dest="name_filter", default=None, help="regex to filter key names")
-    parser.add_argument("--no-branches", action="store_true", help="skip per-TTree branch tables in CLI mode")
+    parser.add_argument("--depth", type=int, default=None, help="limit directory recursion depth (ROOT only)")
+    parser.add_argument(
+        "--filter", dest="name_filter", default=None,
+        help="regex to filter key names (ROOT) or column names (Parquet)",
+    )
+    parser.add_argument(
+        "--no-branches", action="store_true",
+        help="skip per-TTree branch tables / per-Parquet column tables in CLI mode",
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
     args = parser.parse_args(argv)
 
@@ -36,23 +59,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: no such file: {args.rootfile}", file=sys.stderr)
         return 1
 
+    spec = find_backend(args.rootfile)
     try:
-        with uproot.open(args.rootfile) as f:
-            nodes = walk_directory(f, depth=args.depth, name_filter=args.name_filter)
-            summary = file_summary(f, args.rootfile, nodes)
-
-            if args.tui:
-                from rootfileviewer.tui import run_tui
-
-                run_tui(args.rootfile, nodes, summary)
-            elif args.terse:
-                from rootfileviewer.render import render_terse
-
-                render_terse(args.rootfile, nodes, summary, show_branches=not args.no_branches)
-            else:
-                from rootfileviewer.render import render_cli
-
-                render_cli(args.rootfile, nodes, summary, show_branches=not args.no_branches)
+        if spec is not None:
+            backend = load_backend(spec)
+            nodes = backend.walk(args.rootfile, name_filter=args.name_filter)
+            summary = backend.summary(args.rootfile, nodes)
+            _dispatch(args, args.rootfile, nodes, summary)
+        else:
+            with uproot.open(args.rootfile) as f:
+                nodes = walk_directory(f, depth=args.depth, name_filter=args.name_filter)
+                summary = file_summary(f, args.rootfile, nodes)
+                _dispatch(args, args.rootfile, nodes, summary)
+    except MissingBackendError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     except Exception as exc:
         print(f"error: failed to read {args.rootfile}: {exc}", file=sys.stderr)
         return 1

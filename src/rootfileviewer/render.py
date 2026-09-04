@@ -15,16 +15,28 @@ def render_cli(path: str, nodes: list[Node], summary: dict, show_branches: bool 
 
     console = Console()
 
-    summary_lines = (
-        f"[bold]File:[/bold] {summary['path']}\n"
-        f"[bold]Size:[/bold] {human_size(summary['size_bytes'])}   "
-        f"[bold]Compression:[/bold] {summary['compression']}\n"
-        f"[bold]uproot:[/bold] {summary['uproot_version']}\n"
-        f"[bold]Keys:[/bold] {summary['total_keys']}   "
-        f"[bold]TTrees:[/bold] {summary['num_trees']}   "
-        f"[bold]Histograms:[/bold] {summary['num_histograms']}"
-    )
-    console.print(Panel(summary_lines, title="ROOT file summary", expand=False))
+    if summary.get("format") == "parquet":
+        summary_lines = (
+            f"[bold]File:[/bold] {summary['path']}\n"
+            f"[bold]Size:[/bold] {human_size(summary['size_bytes'])}\n"
+            f"[bold]pyarrow:[/bold] {summary['pyarrow_version']}\n"
+            f"[bold]Rows:[/bold] {summary['num_rows']:,}   "
+            f"[bold]Columns:[/bold] {summary['num_columns']}   "
+            f"[bold]Row groups:[/bold] {summary['num_row_groups']}"
+        )
+        panel_title = "Parquet file summary"
+    else:
+        summary_lines = (
+            f"[bold]File:[/bold] {summary['path']}\n"
+            f"[bold]Size:[/bold] {human_size(summary['size_bytes'])}   "
+            f"[bold]Compression:[/bold] {summary['compression']}\n"
+            f"[bold]uproot:[/bold] {summary['uproot_version']}\n"
+            f"[bold]Keys:[/bold] {summary['total_keys']}   "
+            f"[bold]TTrees:[/bold] {summary['num_trees']}   "
+            f"[bold]Histograms:[/bold] {summary['num_histograms']}"
+        )
+        panel_title = "ROOT file summary"
+    console.print(Panel(summary_lines, title=panel_title, expand=False))
 
     root_label = f"[bold]{os.path.basename(path)}[/bold]"
     rich_tree = Tree(root_label)
@@ -34,8 +46,16 @@ def render_cli(path: str, nodes: list[Node], summary: dict, show_branches: bool 
     if show_branches:
         for tree_path, node in flatten_trees(nodes):
             rows = tree_branch_info(node.obj)
-            table = Table(title=f"TTree: {tree_path}  ({node.obj.num_entries:,} entries)")
-            table.add_column("Branch")
+            is_parquet = node.classname == "ParquetTable"
+            if is_parquet:
+                # There's only ever one (synthetic) table per Parquet file, so
+                # identify it by the file itself rather than the internal
+                # node name ("table"), which would read redundantly here.
+                label = f"Table: {os.path.basename(path)}"
+            else:
+                label = f"TTree: {tree_path}"
+            table = Table(title=f"{label}  ({node.obj.num_entries:,} entries)")
+            table.add_column("Column" if is_parquet else "Branch")
             table.add_column("Type")
             for row in rows:
                 table.add_row(row["name"], row["typename"])
