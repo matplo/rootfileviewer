@@ -57,13 +57,16 @@ The base install only pulls in `uproot` (and `rich`/`textual`/`plotext` for
 rendering) — it does **not** require `pyarrow`, `h5py`, or `pandas`, so it
 stays lean if you only ever open `.root` files. `.npy`/`.npz` files work out
 of the box too, no extra needed (`numpy` is already `uproot`'s own
-dependency). Parquet, HDF5, and pandas-readable formats are optional extras:
+dependency). Parquet, HDF5, and pandas-readable formats are optional extras
+— and so is `matplotlib`, needed only for the TUI's PNG export (`p`, see
+[Exporting a plot as a PNG](#exporting-a-plot-as-a-png)):
 
 ```bash
-pip install 'rootfileviewer[parquet]'   # adds pyarrow, for .parquet/.pq files
-pip install 'rootfileviewer[hdf5]'      # adds h5py, for .h5/.hdf5 files
-pip install 'rootfileviewer[pandas]'    # adds pandas+pyarrow, for .csv/.pkl/.feather/.jsonl files
-pip install 'rootfileviewer[all]'       # every optional format's dependencies
+pip install 'rootfileviewer[parquet]'     # adds pyarrow, for .parquet/.pq files
+pip install 'rootfileviewer[hdf5]'        # adds h5py, for .h5/.hdf5 files
+pip install 'rootfileviewer[pandas]'      # adds pandas+pyarrow, for .csv/.pkl/.feather/.jsonl files
+pip install 'rootfileviewer[matplotlib]'  # adds matplotlib, for the TUI's PNG export
+pip install 'rootfileviewer[all]'         # every optional format's dependencies, plus matplotlib
 ```
 
 If you point a lean install at a file needing an extra you don't have, it
@@ -814,6 +817,39 @@ be strictly positive (a log axis can't represent zero or negative numbers);
 if the current data has any zero or negative value, pressing `x` reports a
 `plot error` in the detail panel instead of a broken plot, and `y` isn't
 affected by this restriction at all since counts are never negative.
+
+#### Exporting a plot as a PNG
+
+Press `p` while a plot is showing to save it as a real PNG via
+[`matplotlib`](https://matplotlib.org/) — an optional extra (see
+[Install](#install)); without it, `p` shows a toast telling you to
+`pip install 'rootfileviewer[matplotlib]'` rather than crashing. The file is
+named `<source-file-stem>_<node-name>.png` (e.g. `sample_pt.png`) in the
+current directory — pressing `p` again on the same node overwrites it
+rather than piling up new files. It's self-documenting: the node name is
+the title, and a footer names the source file and the same sampling note
+shown in the detail panel (e.g. `2,000 entries`, or `200,000/5,000,000
+entries, ..., N non-finite excluded` on a huge or messy branch):
+
+```
+$ rootfileviewer examples/sample.root --tui
+# select the pt branch, press p
+Saved sample_pt.png
+```
+
+The resulting `sample_pt.png` is a normal `matplotlib` bar chart: a
+right-skewed histogram titled `pt`, x-axis labeled `value`, y-axis labeled
+`count`, with `sample.root — 2,000 entries` printed as a small caption below
+the axes — everything needed to know what the image is without also having
+the terminal session in front of you.
+
+If `x`/`y` are toggled when you press `p`, the PNG reflects that too — but
+using `matplotlib`'s own real `ax.set_xscale("log")`/`set_yscale("log")`
+rather than the tick-relabeling trick the ASCII plot needs, since
+`matplotlib` (unlike `plotext`) has native log-axis support. `p` exports
+whatever's actually currently visible: selecting a non-plottable node (or
+one that fails to plot) clears the export target, so it never re-saves a
+stale previous plot by mistake.
 
 ### Terse mode
 

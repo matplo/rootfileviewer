@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 import os
+import re
+from pathlib import Path
 
 from rootfileviewer.core import (
     Node,
@@ -47,6 +49,7 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
             ("q", "quit", "Quit"),
             ("x", "toggle_log_x", "Log X"),
             ("y", "toggle_log_y", "Log Y"),
+            ("p", "export_png", "Export PNG"),
         ]
         TITLE = f"rootfileviewer: {os.path.basename(path)}"
 
@@ -63,6 +66,7 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
             self._log_x = False
             self._log_y = False
             self._selected_node: Node | None = None
+            self._last_plot: tuple[str, list[float], list[float], bool, bool, str | None] | None = None
             tree_widget = self.query_one("#tree", TextualTree)
             tree_widget.root.expand()
             self._populate(tree_widget.root, nodes)
@@ -77,6 +81,30 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
         def action_toggle_log_y(self) -> None:
             self._log_y = not self._log_y
             self._show_node(self._selected_node)
+
+        def action_export_png(self) -> None:
+            if self._last_plot is None:
+                self.notify("Nothing is currently plotted to export.", severity="warning")
+                return
+            title, centers, values, log_x, log_y, note = self._last_plot
+            safe_title = re.sub(r"[^\w.-]", "_", title)
+            out_path = f"{Path(path).stem}_{safe_title}.png"
+            subtitle = os.path.basename(path) + (f" — {note}" if note else "")
+            try:
+                from rootfileviewer.png_export import export_png
+
+                export_png(out_path, title, subtitle, centers, values, log_x=log_x, log_y=log_y)
+            except ImportError:
+                self.notify(
+                    "PNG export needs matplotlib. Install with:\npip install 'rootfileviewer[matplotlib]'",
+                    severity="error",
+                    timeout=8,
+                )
+                return
+            except Exception as exc:
+                self.notify(f"PNG export failed: {exc}", severity="error")
+                return
+            self.notify(f"Saved {out_path}")
 
         @staticmethod
         def _set_table(table: DataTable, headers: tuple[str, str], rows: list[tuple[str, str]]) -> None:
@@ -130,6 +158,7 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
             table = self.query_one("#detail", DataTable)
             plot_widget = self.query_one("#histplot", PlotextPlot)
             plot_widget.display = False
+            self._last_plot = None
 
             if node is None:
                 self._set_table(table, ("Field", "Value"), [])
@@ -218,6 +247,7 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
             try:
                 centers, values = histogram_data(node.obj)
                 self._render_plot(plot_widget, node.name, centers, values)
+                self._last_plot = (node.name, centers, values, self._log_x, self._log_y, None)
             except Exception as exc:
                 plot_widget.display = False
                 return str(exc)
@@ -228,6 +258,7 @@ def run_tui(path: str, nodes: list[Node], summary: dict) -> None:
             try:
                 centers, values, note = branch_histogram_data(node.obj, log_x=self._log_x)
                 self._render_plot(plot_widget, node.name, centers, values)
+                self._last_plot = (node.name, centers, values, self._log_x, self._log_y, note)
                 return note, None
             except Exception as exc:
                 plot_widget.display = False
