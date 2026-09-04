@@ -39,14 +39,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="plain, tab-separated output with no borders/colors, for scripts/grep/awk",
     )
-    parser.add_argument("--depth", type=int, default=None, help="limit directory recursion depth (ROOT only)")
+    parser.add_argument(
+        "--depth", type=int, default=None,
+        help="limit directory recursion depth (ROOT, HDF5; no-op for flat formats)",
+    )
     parser.add_argument(
         "--filter", dest="name_filter", default=None,
-        help="regex to filter key names (ROOT) or column names (Parquet)",
+        help="regex to filter key/group/dataset names (ROOT, HDF5) or column names (Parquet, pandas)",
     )
     parser.add_argument(
         "--no-branches", action="store_true",
-        help="skip per-TTree branch tables / per-Parquet column tables in CLI mode",
+        help="skip per-TTree/per-table branch or column tables in CLI mode (no-op for HDF5/numpy)",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
     args = parser.parse_args(argv)
@@ -63,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if spec is not None:
             backend = load_backend(spec)
-            nodes = backend.walk(args.rootfile, name_filter=args.name_filter)
+            nodes = backend.walk(args.rootfile, depth=args.depth, name_filter=args.name_filter)
             summary = backend.summary(args.rootfile, nodes)
             _dispatch(args, args.rootfile, nodes, summary)
         else:

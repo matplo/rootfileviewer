@@ -15,7 +15,8 @@ def render_cli(path: str, nodes: list[Node], summary: dict, show_branches: bool 
 
     console = Console()
 
-    if summary.get("format") == "parquet":
+    fmt = summary.get("format")
+    if fmt == "parquet":
         summary_lines = (
             f"[bold]File:[/bold] {summary['path']}\n"
             f"[bold]Size:[/bold] {human_size(summary['size_bytes'])}\n"
@@ -25,6 +26,17 @@ def render_cli(path: str, nodes: list[Node], summary: dict, show_branches: bool 
             f"[bold]Row groups:[/bold] {summary['num_row_groups']}"
         )
         panel_title = "Parquet file summary"
+    elif fmt == "hdf5":
+        summary_lines = (
+            f"[bold]File:[/bold] {summary['path']}\n"
+            f"[bold]Size:[/bold] {human_size(summary['size_bytes'])}\n"
+            f"[bold]h5py:[/bold] {summary['h5py_version']}   "
+            f"[bold]HDF5:[/bold] {summary['hdf5_version']}\n"
+            f"[bold]Keys:[/bold] {summary['total_keys']}   "
+            f"[bold]Groups:[/bold] {summary['num_groups']}   "
+            f"[bold]Datasets:[/bold] {summary['num_datasets']}"
+        )
+        panel_title = "HDF5 file summary"
     else:
         summary_lines = (
             f"[bold]File:[/bold] {summary['path']}\n"
@@ -90,6 +102,11 @@ def _class_style(node: Node) -> str:
         return "green"
     if node.is_hist:
         return "magenta"
+    if node.is_branch:
+        # First relevant for a backend whose leaves are real top-level/nested
+        # tree members (HDF5 datasets, numpy arrays) rather than only ever
+        # synthesized dynamically inside the TUI.
+        return "yellow"
     return "white"
 
 

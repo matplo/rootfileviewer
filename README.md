@@ -1,11 +1,12 @@
 # rootfileviewer
 
-Inspect a [ROOT](https://root.cern) or [Parquet](https://parquet.apache.org)
-file's contents from the terminal — directory/object hierarchy, TTree
-branches or Parquet columns, and file-level stats — using
-[`uproot`](https://github.com/scikit-hep/uproot5) (bundled) and
+Inspect a [ROOT](https://root.cern), [Parquet](https://parquet.apache.org),
+or [HDF5](https://www.hdfgroup.org/solutions/hdf5/) file's contents from the
+terminal — object hierarchy, branches/columns/datasets, and file-level
+stats — using [`uproot`](https://github.com/scikit-hep/uproot5) (bundled),
 [`pyarrow`](https://arrow.apache.org/docs/python/) (optional, for Parquet),
-with no PyROOT/ROOT installation required.
+and [`h5py`](https://www.h5py.org/) (optional, for HDF5), with no PyROOT/ROOT
+installation required.
 
 - **One-shot mode** (default): prints a summary panel, an ASCII object tree,
   and per-`TTree`/per-Parquet-column tables, rendered with [`rich`](https://github.com/Textualize/rich).
@@ -16,16 +17,18 @@ with no PyROOT/ROOT installation required.
   [`textual-plotext`](https://github.com/Textualize/textual-plotext)/[`plotext`](https://github.com/piccolomo/plotext).
   2D/3D histograms aren't plotted yet — the detail panel notes this instead.
   A `TTree`/`TNtuple` node (or a Parquet file's implicit table) expands into
-  its branches/columns — selecting one plots its value distribution the same
-  way (vector/jagged branches are flattened first; very large trees/columns
-  are capped at 200,000 entries, noted in the detail panel).
+  its branches/columns — selecting one, or an HDF5 dataset directly, plots
+  its value distribution the same way (vector/jagged branches, Parquet
+  `list<...>` columns, and HDF5 variable-length datasets are all flattened
+  first; very large trees/columns/datasets are capped at 200,000 entries,
+  noted in the detail panel).
 - **Terse mode** (`--terse`/`-t`): flat, tab-separated, no-color output —
   for piping into `grep`/`awk`/other scripts.
 
-Parquet support is an optional extra (see [Install](#install)) — a lean
-`pip install rootfileviewer` covers ROOT files only, so pointing it at a
-`.parquet` file without the extra prints clear install instructions instead
-of failing with an import error.
+Parquet and HDF5 support are optional extras (see [Install](#install)) — a
+lean `pip install rootfileviewer` covers ROOT files only, so pointing it at
+a `.parquet`/`.h5` file without the matching extra prints clear install
+instructions instead of failing with an import error.
 
 ## Install
 
@@ -39,16 +42,18 @@ and `rfvt` (equivalent to `rootfileviewer --tui`). So `rfv examples/sample.root`
 and `rfvt examples/sample.root` work anywhere the long forms do.
 
 The base install only pulls in `uproot` (and `rich`/`textual`/`plotext` for
-rendering) — it does **not** require `pyarrow`, so it stays lean if you only
-ever open `.root` files. Parquet support is an optional extra:
+rendering) — it does **not** require `pyarrow` or `h5py`, so it stays lean if
+you only ever open `.root` files. Parquet and HDF5 support are optional
+extras:
 
 ```bash
 pip install 'rootfileviewer[parquet]'   # adds pyarrow, for .parquet/.pq files
+pip install 'rootfileviewer[hdf5]'      # adds h5py, for .h5/.hdf5 files
 pip install 'rootfileviewer[all]'       # every optional format's dependencies
 ```
 
-If you point a lean install at a `.parquet` file, it tells you exactly what
-to do instead of crashing:
+If you point a lean install at a `.parquet`/`.h5` file, it tells you exactly
+what to do instead of crashing:
 
 ```
 $ rootfileviewer data.parquet
@@ -88,6 +93,14 @@ The Parquet examples use [`examples/sample.parquet`](examples/sample.parquet)
 `pt`/`eta`/`n_jets` columns and 2,000 rows as the `events` TTree above, so
 the two are directly comparable; Parquet has no histogram or subdirectory
 equivalent.
+
+The HDF5 examples use [`examples/sample.h5`](examples/sample.h5) (regenerate
+it with `python examples/make_sample_hdf5.py`) — the same `pt`/`eta`/`n_jets`
+datasets and 2,000 entries, a `tracks_energy` variable-length ("jagged")
+dataset (a per-event list of track energies — HDF5's analogue of a jagged
+ROOT branch or a Parquet `list<double>` column), and a subgroup `aux` holding
+a `run_number` dataset, so it maps onto `sample.root`'s shape almost exactly
+(HDF5 Groups are real directories, just like ROOT's).
 
 Clone the repo and run these directly:
 
@@ -162,6 +175,31 @@ sample.parquet
 └────────┴────────┘
 ```
 
+HDF5 files, once the `[hdf5]` extra is installed, look the closest to ROOT's
+own output — real Groups nest like TDirectories, and each Dataset shows its
+dtype and shape directly (no separate per-tree table is needed, since
+there's nothing hidden the way ROOT branches are inside a TTree):
+
+```bash
+rootfileviewer examples/sample.h5
+```
+
+```
+╭──────── HDF5 file summary ────────╮
+│ File: examples/sample.h5          │
+│ Size: 142.3 KB                    │
+│ h5py: 3.16.0   HDF5: 2.0.0        │
+│ Keys: 6   Groups: 1   Datasets: 5 │
+╰───────────────────────────────────╯
+sample.h5
+├── aux (HDF5Group)
+│   └── run_number (int32[5])
+├── eta (float64[2000])
+├── n_jets (int32[2000])
+├── pt (float64[2000])
+└── tracks_energy (vlen<float64>[2000])
+```
+
 Other one-shot flags:
 
 ```bash
@@ -178,6 +216,17 @@ same way:
 ```bash
 rootfileviewer examples/sample.parquet --filter 'pt|eta'    # only pt/eta columns
 rootfileviewer examples/sample.parquet --no-branches        # skip the column table
+```
+
+HDF5 is the one non-ROOT format where `--depth` does something real, since
+Groups genuinely nest — `--filter` matches group/dataset names at every
+level, same as ROOT; `--no-branches` is a no-op (there's no separate table
+to skip — a dataset's dtype/shape is already shown directly in the tree
+above):
+
+```bash
+rootfileviewer examples/sample.h5 --depth 0          # don't recurse into aux/
+rootfileviewer examples/sample.h5 --filter 'pt|eta'  # only pt/eta datasets
 ```
 
 ### Interactive TUI
@@ -345,9 +394,46 @@ special-cased "categorical" plot.
 
 </details>
 
-Note the detail panel shows `branch`/`type` labels for a selected column
-(reused verbatim from the ROOT branch code path) rather than "column" —
-harmless, cosmetic, and left as-is.
+For an HDF5 file, Groups expand like real directories and Datasets are
+directly selectable and plottable — including a variable-length ("jagged")
+dataset, flattened across all its rows the same way a jagged ROOT branch or
+a Parquet `list<double>` column is:
+
+```bash
+rootfileviewer examples/sample.h5 --tui
+```
+
+<details>
+<summary>Selecting the <code>tracks_energy</code> dataset (variable-length, per-event track energies) — exact terminal capture</summary>
+
+```
+                                 tracks_energy                           
+     ┌──────────────────────────────────────────────────────────────────┐
+884.0┤    ████                                                          │
+     │  ████████                                                        │
+736.7┤  ████████                                                        │
+     │  ████████                                                        │
+589.3┤  ██████████                                                      │
+442.0┤████████████                                                      │
+     │██████████████                                                    │
+294.7┤████████████████                                                  │
+     │██████████████████                                                │
+147.3┤█████████████████████                                             │
+     │███████████████████████████                                       │
+  0.0┤██████████████████████████████████████████████████████████████████│
+     └────────────────┬──────────────┬──────────┬───────────────────────┘
+          37.1623311832877   71.71512472646408 96.39569154301864
+```
+
+Detail panel: `sampled: 2,000 entries, 4,953 values (flattened)` — 2,000
+events' worth of `tracks_energy` reads to a ragged array of ~2.5 tracks per
+event on average, flattened into one distribution.
+
+</details>
+
+Note the detail panel shows `branch`/`type` labels for a selected column or
+dataset (reused verbatim from the ROOT branch code path) rather than
+"column"/"dataset" — harmless, cosmetic, and left as-is.
 
 ### Terse mode
 
@@ -408,15 +494,41 @@ branch	table	eta	double
 branch	table	n_jets	int32
 ```
 
+HDF5 output needs no `branch`-tag rows at all: unlike a TTree's branches or
+a Parquet table's columns (which live *inside* one enumerable object and
+need a separate listing mechanism), each HDF5 dataset is already its own
+distinct `object` row, wherever it sits in the group hierarchy:
+
+```bash
+rootfileviewer examples/sample.h5 -t
+```
+
+```
+summary	path	examples/sample.h5
+summary	format	hdf5
+summary	size_bytes	145748
+summary	h5py_version	3.16.0
+summary	hdf5_version	2.0.0
+summary	num_groups	1
+summary	num_datasets	5
+summary	total_keys	6
+object	aux	HDF5Group
+object	aux/run_number	int32[5]	entries=5
+object	eta	float64[2000]	entries=2000
+object	n_jets	int32[2000]	entries=2000
+object	pt	float64[2000]	entries=2000
+object	tracks_energy	vlen<float64>[2000]	entries=2000
+```
+
 ### Options
 
 | Flag              | Description                                             |
 |-------------------|----------------------------------------------------------|
 | `--tui`           | launch the interactive textual TUI instead of printing (same as running `rfvt`) |
 | `--terse`, `-t`   | flat, tab-separated output with no borders/colors        |
-| `--depth N`       | limit directory recursion depth (ROOT only — no-op for Parquet, which has no subdirectories) |
-| `--filter REGEX`  | only show keys whose name matches REGEX (ROOT) or column names matching REGEX (Parquet) |
-| `--no-branches`   | skip per-TTree branch info / per-Parquet column info in one-shot/terse mode |
+| `--depth N`       | limit directory recursion depth (ROOT, HDF5 — no-op for Parquet, which has no subdirectories) |
+| `--filter REGEX`  | only show keys/group/dataset names matching REGEX (ROOT, HDF5) or column names matching REGEX (Parquet) |
+| `--no-branches`   | skip per-TTree/per-Parquet branch or column tables in one-shot/terse mode (no-op for HDF5 — nothing separate to skip) |
 
 ## License
 

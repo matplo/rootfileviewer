@@ -112,7 +112,10 @@ class ParquetTable:
         return len(self._all_fields)
 
 
-def walk(path: str, name_filter: str | None = None) -> list[Node]:
+def walk(path: str, depth: int | None = None, name_filter: str | None = None) -> list[Node]:
+    # depth is accepted for interface uniformity with other backends
+    # (cli.py's single call site passes it unconditionally) but is a no-op
+    # here -- a Parquet file is one flat table, nothing to recurse into.
     table = ParquetTable(path, name_filter=name_filter)
     return [Node(name="table", classname="ParquetTable", obj=table)]
 

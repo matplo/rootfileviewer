@@ -29,7 +29,10 @@ class Node:
 
     @property
     def is_dir(self) -> bool:
-        return self.classname.startswith("TDirectory")
+        # HDF5Group is a real (not synthetic) classname for an h5py Group --
+        # see backends/hdf5.py -- reusing this same directory-recursion
+        # machinery, unlike ParquetTable/DataFrameTable's single-node wrapper.
+        return self.classname.startswith("TDirectory") or self.classname == "HDF5Group"
 
     @property
     def is_tree(self) -> bool:
@@ -127,6 +130,16 @@ def node_facts(node: Node) -> dict[str, int]:
     if node.is_hist and node.obj is not None:
         try:
             return {"bins": len(node.obj.axis())}
+        except Exception:
+            return {}
+    if node.is_branch and node.obj is not None:
+        # Dead code for ROOT/Parquet: their branch/column children are only
+        # ever synthesized dynamically inside the TUI (branch_nodes()), never
+        # part of the static walk() tree that flatten_nodes()/node_facts()
+        # here operate on. First live for a backend whose leaves genuinely
+        # are top-level/nested tree members -- HDF5 datasets, numpy arrays.
+        try:
+            return {"entries": node.obj.num_entries}
         except Exception:
             return {}
     return {}

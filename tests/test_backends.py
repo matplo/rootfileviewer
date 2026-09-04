@@ -13,6 +13,13 @@ class BackendRegistryTests(unittest.TestCase):
                 self.assertIsNotNone(spec)
                 self.assertEqual(spec.name, "parquet")
 
+    def test_find_backend_matches_hdf5_extensions(self) -> None:
+        for path in ("file.h5", "FILE.H5", "file.hdf5", "dir/sub/file.hdf5"):
+            with self.subTest(path=path):
+                spec = find_backend(path)
+                self.assertIsNotNone(spec)
+                self.assertEqual(spec.name, "hdf5")
+
     def test_find_backend_returns_none_for_root_and_unknown(self) -> None:
         for path in ("file.root", "file.txt", "file", "file.parquet.bak"):
             with self.subTest(path=path):
@@ -24,6 +31,13 @@ class BackendRegistryTests(unittest.TestCase):
         message = str(exc)
         self.assertIn("pip install 'rootfileviewer[parquet]'", message)
         self.assertIn("pip install pyarrow", message)
+
+    def test_missing_backend_error_for_hdf5(self) -> None:
+        spec = find_backend("file.h5")
+        exc = MissingBackendError(spec, ["h5py"])
+        message = str(exc)
+        self.assertIn("pip install 'rootfileviewer[hdf5]'", message)
+        self.assertIn("pip install h5py", message)
 
 
 if __name__ == "__main__":

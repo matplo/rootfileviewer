@@ -38,6 +38,13 @@ BACKENDS: tuple[BackendSpec, ...] = (
         extra="parquet",
         packages=("pyarrow",),
     ),
+    BackendSpec(
+        name="hdf5",
+        extensions=(".h5", ".hdf5"),
+        module="rootfileviewer.backends.hdf5",
+        extra="hdf5",
+        packages=("h5py",),
+    ),
 )
 
 
