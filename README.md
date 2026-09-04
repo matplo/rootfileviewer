@@ -1,5 +1,13 @@
 # rootfileviewer
 
+> **This project has been renamed to [`datafileviewer`](https://github.com/matplo/datafileviewer)
+> ([PyPI](https://pypi.org/project/datafileviewer/)).** The tool outgrew "ROOT
+> file viewer" a while ago — it also reads Parquet, HDF5, numpy, and
+> pandas-readable files, with an interactive TUI that has nothing to do with
+> ROOT specifically. Same codebase, full commit history carried over, new
+> identity. This `rootfileviewer` package/repo is now frozen at this final
+> release — install `datafileviewer` for anything new.
+
 Inspect a [ROOT](https://root.cern), [Parquet](https://parquet.apache.org),
 [HDF5](https://www.hdfgroup.org/solutions/hdf5/), [numpy](https://numpy.org)
 (`.npy`/`.npz`), or pandas-readable (`.csv`/`.pkl`/`.feather`/`.jsonl`) file's
