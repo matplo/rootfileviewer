@@ -65,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     spec = find_backend(args.rootfile)
     try:
         if spec is not None:
-            backend = load_backend(spec)
+            backend = load_backend(spec, args.rootfile)
             nodes = backend.walk(args.rootfile, depth=args.depth, name_filter=args.name_filter)
             summary = backend.summary(args.rootfile, nodes)
             _dispatch(args, args.rootfile, nodes, summary)

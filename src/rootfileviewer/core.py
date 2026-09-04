@@ -36,10 +36,11 @@ class Node:
 
     @property
     def is_tree(self) -> bool:
-        # ParquetTable is a synthetic classname (see backends/parquet.py)
-        # standing in for a whole Parquet file's implicit flat table, so it
-        # can reuse this same branch-expansion/plotting machinery.
-        return self.classname in ("TTree", "TNtuple", "ParquetTable")
+        # ParquetTable/DataFrameTable are synthetic classnames (see
+        # backends/parquet.py, backends/pandas_tables.py) standing in for a
+        # whole file's implicit flat table, so they can reuse this same
+        # branch-expansion/plotting machinery.
+        return self.classname in ("TTree", "TNtuple", "ParquetTable", "DataFrameTable")
 
     @property
     def is_hist(self) -> bool:
@@ -151,7 +152,10 @@ def node_hint(node: Node) -> str:
     if node.is_tree:
         if "entries" not in facts:
             return ""
-        unit = "columns" if node.classname == "ParquetTable" else "branches"
+        # Inverted to a ROOT-specific allowlist rather than an ever-growing
+        # list of non-ROOT classnames, so new table-shaped backends don't
+        # need another edit here.
+        unit = "branches" if node.classname in ("TTree", "TNtuple") else "columns"
         return f"{facts['entries']:,} entries, {facts['branches']} {unit}"
     if node.is_hist:
         if "bins" not in facts:

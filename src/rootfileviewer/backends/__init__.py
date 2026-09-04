@@ -56,16 +56,34 @@ BACKENDS: tuple[BackendSpec, ...] = (
         # the box with the base install.
         packages=(),
     ),
+    BackendSpec(
+        name="pandas",
+        extensions=(".csv", ".pkl", ".pickle", ".feather", ".jsonl", ".ndjson"),
+        module="rootfileviewer.backends.pandas_tables",
+        extra="pandas",
+        # .feather specifically also needs pyarrow underneath
+        # pandas.read_feather; this probe only checks the common
+        # denominator (pandas). The [pandas] extras group installs both
+        # together, so anyone using it never hits that edge -- a bare
+        # pandas-without-pyarrow install trying a .feather file surfaces
+        # pandas' own ImportError through cli.py's generic exception
+        # handler instead of our polished two-option message.
+        packages=("pandas",),
+    ),
 )
 
 
 class MissingBackendError(RuntimeError):
     """Raised when a file needs a backend whose dependencies aren't installed."""
 
-    def __init__(self, spec: BackendSpec, missing: list[str]):
+    def __init__(self, spec: BackendSpec, missing: list[str], ext: str):
+        # Use the file's actual extension, not spec.name -- they coincide
+        # for parquet/hdf5/numpy (one backend, one "primary" extension) but
+        # not for pandas, which covers 6 extensions under one backend name;
+        # ".pandas" isn't a real extension and would be a confusing message.
         pkgs = " ".join(missing)
         super().__init__(
-            f"reading .{spec.name} files needs: {pkgs}\n"
+            f"reading {ext} files needs: {pkgs}\n"
             f"Install it with either:\n"
             f"    pip install 'rootfileviewer[{spec.extra}]'\n"
             f"or:\n"
@@ -83,12 +101,12 @@ def find_backend(path: str) -> BackendSpec | None:
     return None
 
 
-def load_backend(spec: BackendSpec):
+def load_backend(spec: BackendSpec, path: str):
     """Import spec's module, or raise MissingBackendError with install instructions.
 
     Silent (no output) when the backend's dependencies are already installed.
     """
     missing = [pkg for pkg in spec.packages if importlib.util.find_spec(pkg) is None]
     if missing:
-        raise MissingBackendError(spec, missing)
+        raise MissingBackendError(spec, missing, os.path.splitext(path)[1].lower())
     return importlib.import_module(spec.module)

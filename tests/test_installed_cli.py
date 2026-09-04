@@ -16,8 +16,11 @@ SAMPLE_PARQUET = REPO_ROOT / "examples" / "sample.parquet"
 SAMPLE_HDF5 = REPO_ROOT / "examples" / "sample.h5"
 SAMPLE_NPZ = REPO_ROOT / "examples" / "sample.npz"
 SAMPLE_NPY = REPO_ROOT / "examples" / "sample.npy"
+SAMPLE_CSV = REPO_ROOT / "examples" / "sample.csv"
+SAMPLE_PICKLE = REPO_ROOT / "examples" / "sample.pkl"
 HAVE_PYARROW = importlib.util.find_spec("pyarrow") is not None
 HAVE_H5PY = importlib.util.find_spec("h5py") is not None
+HAVE_PANDAS = importlib.util.find_spec("pandas") is not None
 
 
 class InstalledCliTests(unittest.TestCase):
@@ -44,14 +47,14 @@ class InstalledCliTests(unittest.TestCase):
         self.assertEqual(entry_points.get("rfvt"), "rootfileviewer.cli:main_tui")
 
     def test_package_version(self) -> None:
-        self.assertEqual(rootfileviewer.__version__, "0.8.1")
+        self.assertEqual(rootfileviewer.__version__, "0.9.0")
 
     def test_all_commands_report_their_invoked_name(self) -> None:
         for command in ("rootfileviewer", "rfv", "rfvt"):
             with self.subTest(command=command):
                 result = self.run_cli(command, "--version")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout.strip(), f"{command} 0.8.1")
+                self.assertEqual(result.stdout.strip(), f"{command} 0.9.0")
 
     def test_both_commands_read_the_sample_file(self) -> None:
         for command in ("rootfileviewer", "rfv"):
@@ -127,6 +130,33 @@ class InstalledCliTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn(f"summary\tpath\t{SAMPLE_NPY}", result.stdout)
                 self.assertIn("object\tsample\tfloat64[2000]\tentries=2000", result.stdout)
+
+    @unittest.skipUnless(HAVE_PANDAS, "pandas not installed (pip install rootfileviewer[pandas])")
+    def test_both_commands_read_the_sample_csv_file(self) -> None:
+        for command in ("rootfileviewer", "rfv"):
+            with self.subTest(command=command):
+                result = self.run_cli(command, str(SAMPLE_CSV), "--terse")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"summary\tpath\t{SAMPLE_CSV}", result.stdout)
+                self.assertIn("summary\tformat\tpandas", result.stdout)
+                self.assertIn("object\ttable\tDataFrameTable", result.stdout)
+                self.assertIn("branch\ttable\tpt\tfloat64", result.stdout)
+
+    @unittest.skipUnless(HAVE_PANDAS, "pandas not installed (pip install rootfileviewer[pandas])")
+    def test_both_commands_read_the_sample_pickle_file_with_ragged_column(self) -> None:
+        for command in ("rootfileviewer", "rfv"):
+            with self.subTest(command=command):
+                result = self.run_cli(command, str(SAMPLE_PICKLE), "--terse")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("branch\ttable\ttracks_energy\tragged<float64>", result.stdout)
+
+    @unittest.skipIf(HAVE_PANDAS, "pandas is installed; this exercises the missing-dependency path")
+    def test_csv_file_without_pandas_reports_install_instructions(self) -> None:
+        result = self.run_cli("rootfileviewer", str(SAMPLE_CSV))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("reading .csv files needs: pandas", result.stderr)
+        self.assertIn("pip install 'rootfileviewer[pandas]'", result.stderr)
+        self.assertIn("pip install pandas", result.stderr)
 
 
 if __name__ == "__main__":

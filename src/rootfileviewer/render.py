@@ -45,6 +45,15 @@ def render_cli(path: str, nodes: list[Node], summary: dict, show_branches: bool 
             f"[bold]Arrays:[/bold] {summary['num_arrays']}"
         )
         panel_title = "numpy file summary"
+    elif fmt == "pandas":
+        summary_lines = (
+            f"[bold]File:[/bold] {summary['path']}\n"
+            f"[bold]Size:[/bold] {human_size(summary['size_bytes'])}\n"
+            f"[bold]pandas:[/bold] {summary['pandas_version']}\n"
+            f"[bold]Rows:[/bold] {summary['num_rows']:,}   "
+            f"[bold]Columns:[/bold] {summary['num_columns']}"
+        )
+        panel_title = "DataFrame file summary"
     else:
         summary_lines = (
             f"[bold]File:[/bold] {summary['path']}\n"
@@ -66,16 +75,21 @@ def render_cli(path: str, nodes: list[Node], summary: dict, show_branches: bool 
     if show_branches:
         for tree_path, node in flatten_trees(nodes):
             rows = tree_branch_info(node.obj)
-            is_parquet = node.classname == "ParquetTable"
-            if is_parquet:
-                # There's only ever one (synthetic) table per Parquet file, so
-                # identify it by the file itself rather than the internal
-                # node name ("table"), which would read redundantly here.
+            # Inverted to a ROOT-specific check rather than enumerating every
+            # non-ROOT wrapper classname, so new table-shaped backends (a
+            # single synthetic Node standing in for a whole file's implicit
+            # flat table -- see Node.is_tree) get "Table"/"Column" labeling
+            # without another edit here.
+            is_wrapper_table = node.classname not in ("TTree", "TNtuple")
+            if is_wrapper_table:
+                # There's only ever one (synthetic) table per file for these
+                # backends, so identify it by the file itself rather than the
+                # internal node name ("table"), which would read redundantly.
                 label = f"Table: {os.path.basename(path)}"
             else:
                 label = f"TTree: {tree_path}"
             table = Table(title=f"{label}  ({node.obj.num_entries:,} entries)")
-            table.add_column("Column" if is_parquet else "Branch")
+            table.add_column("Column" if is_wrapper_table else "Branch")
             table.add_column("Type")
             for row in rows:
                 table.add_row(row["name"], row["typename"])

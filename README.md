@@ -1,14 +1,16 @@
 # rootfileviewer
 
 Inspect a [ROOT](https://root.cern), [Parquet](https://parquet.apache.org),
-[HDF5](https://www.hdfgroup.org/solutions/hdf5/), or [numpy](https://numpy.org)
-(`.npy`/`.npz`) file's contents from the terminal — object hierarchy,
-branches/columns/datasets/arrays, and file-level stats — using
+[HDF5](https://www.hdfgroup.org/solutions/hdf5/), [numpy](https://numpy.org)
+(`.npy`/`.npz`), or pandas-readable (`.csv`/`.pkl`/`.feather`/`.jsonl`) file's
+contents from the terminal — object hierarchy, branches/columns/datasets/
+arrays, and file-level stats — using
 [`uproot`](https://github.com/scikit-hep/uproot5) (bundled),
 [`pyarrow`](https://arrow.apache.org/docs/python/) (optional, for Parquet),
-and [`h5py`](https://www.h5py.org/) (optional, for HDF5) — numpy support
-needs no extra install at all, since `numpy` is already a dependency of
-`uproot` itself — with no PyROOT/ROOT installation required.
+[`h5py`](https://www.h5py.org/) (optional, for HDF5), and
+[`pandas`](https://pandas.pydata.org/) (optional) — numpy support needs no
+extra install at all, since `numpy` is already a dependency of `uproot`
+itself — with no PyROOT/ROOT installation required.
 
 - **One-shot mode** (default): prints a summary panel, an ASCII object tree,
   and per-`TTree`/per-Parquet-column tables, rendered with [`rich`](https://github.com/Textualize/rich).
@@ -18,26 +20,27 @@ needs no extra install at all, since `numpy` is already a dependency of
   plots it as an ASCII bar chart in a panel below, via
   [`textual-plotext`](https://github.com/Textualize/textual-plotext)/[`plotext`](https://github.com/piccolomo/plotext).
   2D/3D histograms aren't plotted yet — the detail panel notes this instead.
-  A `TTree`/`TNtuple` node (or a Parquet file's implicit table) expands into
-  its branches/columns — selecting one, or an HDF5 dataset or numpy array
-  directly, plots its value distribution the same way (vector/jagged
-  branches, Parquet `list<...>` columns, HDF5 variable-length datasets, and
-  numpy's own ragged object-dtype arrays are all flattened first; very
-  large trees/columns/datasets/arrays are capped at 200,000 entries, noted
-  in the detail panel).
+  A `TTree`/`TNtuple` node (or a Parquet/DataFrame file's implicit table)
+  expands into its branches/columns — selecting one, or an HDF5 dataset or
+  numpy array directly, plots its value distribution the same way
+  (vector/jagged branches, Parquet `list<...>` columns, HDF5 variable-length
+  datasets, and numpy/pandas' own ragged object-dtype arrays/columns are all
+  flattened first; very large trees/columns/datasets/arrays are capped at
+  200,000 entries, noted in the detail panel).
 - **Terse mode** (`--terse`/`-t`): flat, tab-separated, no-color output —
   for piping into `grep`/`awk`/other scripts.
 
-Parquet and HDF5 support are optional extras (see [Install](#install)) — a
-lean `pip install rootfileviewer` covers ROOT files only, so pointing it at
-a `.parquet`/`.h5` file without the matching extra prints clear install
-instructions instead of failing with an import error.
+Parquet, HDF5, and pandas support are optional extras (see
+[Install](#install)) — a lean `pip install rootfileviewer` covers ROOT files
+only, so pointing it at a file needing one of these without the matching
+extra prints clear install instructions instead of failing with an import
+error.
 
 **Security note**: `.npy`/`.npz` files containing ragged (variable-length)
-arrays are loaded via Python's `pickle` mechanism under the hood — the same
-way `numpy.load` always has for object-dtype arrays — which can execute
-arbitrary code embedded in the file. Only open `.npy`/`.npz` files from
-sources you trust.
+arrays, and pandas' `.pkl`/`.pickle` files, are loaded via Python's `pickle`
+mechanism under the hood — the same way `numpy.load`/`pandas.read_pickle`
+always have — which can execute arbitrary code embedded in the file. Only
+open files like these from sources you trust.
 
 ## Install
 
@@ -51,19 +54,22 @@ and `rfvt` (equivalent to `rootfileviewer --tui`). So `rfv examples/sample.root`
 and `rfvt examples/sample.root` work anywhere the long forms do.
 
 The base install only pulls in `uproot` (and `rich`/`textual`/`plotext` for
-rendering) — it does **not** require `pyarrow` or `h5py`, so it stays lean if
-you only ever open `.root` files. `.npy`/`.npz` files work out of the box
-too, no extra needed (`numpy` is already `uproot`'s own dependency). Parquet
-and HDF5 support are optional extras:
+rendering) — it does **not** require `pyarrow`, `h5py`, or `pandas`, so it
+stays lean if you only ever open `.root` files. `.npy`/`.npz` files work out
+of the box too, no extra needed (`numpy` is already `uproot`'s own
+dependency). Parquet, HDF5, and pandas-readable formats are optional extras:
 
 ```bash
 pip install 'rootfileviewer[parquet]'   # adds pyarrow, for .parquet/.pq files
 pip install 'rootfileviewer[hdf5]'      # adds h5py, for .h5/.hdf5 files
+pip install 'rootfileviewer[pandas]'    # adds pandas+pyarrow, for .csv/.pkl/.feather/.jsonl files
 pip install 'rootfileviewer[all]'       # every optional format's dependencies
 ```
 
-If you point a lean install at a `.parquet`/`.h5` file, it tells you exactly
-what to do instead of crashing:
+If you point a lean install at a file needing an extra you don't have, it
+tells you exactly what to do instead of crashing — naming the file's actual
+extension even for a backend covering several of them at once (`.csv`,
+`.pkl`, `.feather`, `.jsonl` all route through the same `pandas` extra):
 
 ```
 $ rootfileviewer data.parquet
@@ -72,6 +78,14 @@ Install it with either:
     pip install 'rootfileviewer[parquet]'
 or:
     pip install pyarrow
+then re-run this command.
+
+$ rootfileviewer data.csv
+error: reading .csv files needs: pandas
+Install it with either:
+    pip install 'rootfileviewer[pandas]'
+or:
+    pip install pandas
 then re-run this command.
 ```
 
@@ -119,6 +133,14 @@ The numpy examples use [`examples/sample.npz`](examples/sample.npz) and
 object-dtype representation of per-event variable-length data — no HDF5/
 Parquet needed to see the "flatten a jagged array" feature in action);
 `sample.npy` is just the `pt` array on its own, to show the single-array case.
+
+The pandas examples use [`examples/sample.csv`](examples/sample.csv),
+[`sample.feather`](examples/sample.feather), [`sample.pkl`](examples/sample.pkl),
+and [`sample.jsonl`](examples/sample.jsonl) (regenerate all four with
+`python examples/make_sample_pandas.py`) — the same `pt`/`eta`/`n_jets`
+columns; the pickle/JSONL versions also carry a ragged `tracks_energy`
+column (CSV can't round-trip a list-valued cell — it serializes to a literal
+string like `"[1.0, 2.0]"` — so only the binary/structured formats include it).
 
 Clone the repo and run these directly:
 
@@ -241,6 +263,34 @@ sample.npz
 └── tracks_energy (ragged<float64>[2000])
 ```
 
+pandas-readable files (CSV, pickle, Feather, JSON Lines) share the same
+`DataFrameTable` wrapper node as Parquet — once the `[pandas]` extra is
+installed:
+
+```bash
+rootfileviewer examples/sample.pkl
+```
+
+```
+╭─ DataFrame file summary ──╮
+│ File: examples/sample.pkl │
+│ Size: 138.9 KB            │
+│ pandas: 3.0.5             │
+│ Rows: 2,000   Columns: 4  │
+╰───────────────────────────╯
+sample.pkl
+└── table (DataFrameTable) - 2,000 entries, 4 columns
+Table: sample.pkl  (2,000 entries)
+┏━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+┃ Column        ┃ Type            ┃
+┡━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+│ pt            │ float64         │
+│ eta           │ float64         │
+│ n_jets        │ int32           │
+│ tracks_energy │ ragged<float64> │
+└───────────────┴─────────────────┘
+```
+
 Other one-shot flags:
 
 ```bash
@@ -277,6 +327,13 @@ no-op, same reasoning as HDF5:
 
 ```bash
 rootfileviewer examples/sample.npz --filter 'pt|eta'  # only pt/eta arrays
+```
+
+pandas-readable files behave exactly like Parquet: `--filter` matches column
+names, `--depth` is a no-op, `--no-branches` skips the column table:
+
+```bash
+rootfileviewer examples/sample.pkl --filter 'pt|eta'  # only pt/eta columns
 ```
 
 ### Interactive TUI
@@ -518,6 +575,38 @@ rootfileviewer examples/sample.npz --tui
 
 </details>
 
+For a pandas-readable file, the tree root expands into a `table` node the
+same way Parquet's does — a ragged/list-valued column flattens exactly like
+the numpy/HDF5 cases above:
+
+```bash
+rootfileviewer examples/sample.pkl --tui
+```
+
+<details>
+<summary>Selecting the <code>tracks_energy</code> column (a per-row list of track energies) — exact terminal capture</summary>
+
+```
+                                 tracks_energy                           
+     ┌──────────────────────────────────────────────────────────────────┐
+884.0┤    ████                                                          │
+     │  ████████                                                        │
+736.7┤  ████████                                                        │
+     │  ████████                                                        │
+589.3┤  ██████████                                                      │
+442.0┤████████████                                                      │
+     │██████████████                                                    │
+294.7┤████████████████                                                  │
+     │██████████████████                                                │
+147.3┤█████████████████████                                             │
+     │███████████████████████████                                       │
+  0.0┤██████████████████████████████████████████████                 ███│
+     └──────────────────┬────────────────────────────┬──────────────────┘
+                42.09844454659861           106.26791826964046
+```
+
+</details>
+
 ### Terse mode
 
 `--terse`/`-t` prints flat, tab-separated lines instead of panels/trees/tables —
@@ -623,15 +712,37 @@ object	n_jets	int32[2000]	entries=2000
 object	tracks_energy	ragged<float64>[2000]	entries=2000
 ```
 
+pandas-readable files share the `branch`-tag output with Parquet (both use
+the same synthetic-table wrapper):
+
+```bash
+rootfileviewer examples/sample.pkl -t
+```
+
+```
+summary	path	examples/sample.pkl
+summary	format	pandas
+summary	size_bytes	142209
+summary	pandas_version	3.0.5
+summary	num_rows	2000
+summary	num_columns	4
+summary	total_keys	1
+object	table	DataFrameTable	entries=2000	branches=4
+branch	table	pt	float64
+branch	table	eta	float64
+branch	table	n_jets	int32
+branch	table	tracks_energy	ragged<float64>
+```
+
 ### Options
 
 | Flag              | Description                                             |
 |-------------------|----------------------------------------------------------|
 | `--tui`           | launch the interactive textual TUI instead of printing (same as running `rfvt`) |
 | `--terse`, `-t`   | flat, tab-separated output with no borders/colors        |
-| `--depth N`       | limit directory recursion depth (ROOT, HDF5 — no-op for Parquet/numpy, which are flat) |
-| `--filter REGEX`  | only show keys/group/dataset names matching REGEX (ROOT, HDF5), column names (Parquet), or array names (numpy) |
-| `--no-branches`   | skip per-TTree/per-Parquet branch or column tables in one-shot/terse mode (no-op for HDF5/numpy — nothing separate to skip) |
+| `--depth N`       | limit directory recursion depth (ROOT, HDF5 — no-op for Parquet/numpy/pandas, which are flat) |
+| `--filter REGEX`  | only show keys/group/dataset names matching REGEX (ROOT, HDF5), or column/array names (Parquet, numpy, pandas) |
+| `--no-branches`   | skip per-TTree/per-table branch or column tables in one-shot/terse mode (no-op for HDF5/numpy — nothing separate to skip) |
 
 ## License
 
